@@ -1,6 +1,7 @@
 package com.example.trainerapp.ui.screens
 
 import android.app.Application
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -15,7 +16,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider // <--- ВОТ ЭТОГО НЕ ХВАТАЛО
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.trainerapp.data.local.AppDatabase
@@ -61,7 +62,7 @@ class MacroDetailViewModel(application: Application, macroId: Long) : AndroidVie
 class MacroDetailViewModelFactory(
     private val application: Application,
     private val macroId: Long
-) : ViewModelProvider.Factory { // <--- Здесь теперь используется импортированный класс
+) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(MacroDetailViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
@@ -76,12 +77,12 @@ class MacroDetailViewModelFactory(
 fun MacroDetailScreen(
     macroId: Long,
     macroName: String,
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit,
+    onWorkoutClick: (Long, String) -> Unit // <-- ДОБАВИЛИ ПАРАМЕТР ДЛЯ ПЕРЕХОДА
 ) {
     val context = LocalContext.current
     val application = context.applicationContext as Application
 
-    // Создаем ViewModel через фабрику
     val viewModel: MacroDetailViewModel = viewModel(
         factory = MacroDetailViewModelFactory(application, macroId)
     )
@@ -149,6 +150,7 @@ fun MacroDetailScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 4.dp)
+                                .clickable { onWorkoutClick(workout.id, workout.name) } // <-- ДОБАВИЛИ КЛИК
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text("День ${workout.dayNumber}", style = MaterialTheme.typography.labelMedium)
