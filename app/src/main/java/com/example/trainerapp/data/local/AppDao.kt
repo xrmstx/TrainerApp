@@ -21,12 +21,21 @@ interface AppDao {
     suspend fun insertMacrocycle(macrocycle: Macrocycle): Long
 
     // --- Тренировки (Дни внутри шаблона) ---
-    // Временно используем ID макроцикла как ID мезоцикла для простоты
     @Query("SELECT * FROM workouts WHERE mesocycleId = :macroId ORDER BY dayNumber ASC")
     fun getWorkoutsForMacro(macroId: Long): Flow<List<Workout>>
 
     @Insert
     suspend fun insertWorkout(workout: Workout): Long
+
+    // --- Упражнения в шаблоне ---
+    @Query("SELECT * FROM template_exercises WHERE blockId = :blockId ORDER BY `order` ASC")
+    fun getExercisesForBlock(blockId: Long): Flow<List<TemplateExercise>>
+
+    @Insert
+    suspend fun insertExerciseBlock(block: ExerciseBlock): Long
+
+    @Insert
+    suspend fun insertTemplateExercise(exercise: TemplateExercise): Long
 
     // --- Программы клиентов ---
     @Query("SELECT * FROM client_programs WHERE clientId = :clientId ORDER BY weekNumber ASC")
