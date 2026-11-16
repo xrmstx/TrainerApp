@@ -6,15 +6,39 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface AppDao {
+    // --- Клиенты ---
     @Query("SELECT * FROM clients ORDER BY name ASC")
     fun getAllClients(): Flow<List<Client>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertClient(client: Client): Long
 
+    // --- Макроциклы (Шаблоны) ---
     @Query("SELECT * FROM macrocycles")
     fun getAllMacrocycles(): Flow<List<Macrocycle>>
 
     @Insert
     suspend fun insertMacrocycle(macrocycle: Macrocycle): Long
+
+    // --- Тренировки (Дни внутри шаблона) ---
+    // Временно используем ID макроцикла как ID мезоцикла для простоты
+    @Query("SELECT * FROM workouts WHERE mesocycleId = :macroId ORDER BY dayNumber ASC")
+    fun getWorkoutsForMacro(macroId: Long): Flow<List<Workout>>
+
+    @Insert
+    suspend fun insertWorkout(workout: Workout): Long
+
+    // --- Программы клиентов ---
+    @Query("SELECT * FROM client_programs WHERE clientId = :clientId ORDER BY weekNumber ASC")
+    fun getProgramsForClient(clientId: Long): Flow<List<ClientProgram>>
+
+    @Insert
+    suspend fun insertClientProgram(program: ClientProgram): Long
+
+    // --- Логи упражнений ---
+    @Query("SELECT * FROM exercise_logs WHERE clientProgramId = :clientProgramId")
+    suspend fun getLogsForProgram(clientProgramId: Long): List<ExerciseLog>
+
+    @Insert
+    suspend fun insertExerciseLog(log: ExerciseLog): Long
 }
