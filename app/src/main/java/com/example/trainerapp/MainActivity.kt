@@ -15,10 +15,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.example.trainerapp.ui.screens.ClientDetailScreen
-import com.example.trainerapp.ui.screens.ClientScreen
-import com.example.trainerapp.ui.screens.MacroDetailScreen
-import com.example.trainerapp.ui.screens.TemplateScreen
+import com.example.trainerapp.ui.screens.*
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -45,7 +42,7 @@ class MainActivity : ComponentActivity() {
                             NavigationBarItem(
                                 icon = { Icon(Icons.Default.List, contentDescription = null) },
                                 label = { Text("Шаблоны") },
-                                selected = currentRoute?.startsWith("templates") == true || currentRoute?.startsWith("macro_detail") == true,
+                                selected = currentRoute?.startsWith("templates") == true || currentRoute?.startsWith("macro_detail") == true || currentRoute?.startsWith("workout_detail") == true,
                                 onClick = {
                                     navController.navigate("templates") {
                                         popUpTo("clients") { inclusive = false }
@@ -63,33 +60,41 @@ class MainActivity : ComponentActivity() {
                     ) {
                         composable("clients") {
                             ClientScreen(
-                                onClientClick = { id, name ->
-                                    navController.navigate("client_detail/$id/$name")
-                                }
+                                onClientClick = { id, name -> navController.navigate("client_detail/$id/$name") }
                             )
                         }
                         composable("client_detail/{clientId}/{clientName}") { backStackEntry ->
                             val id = backStackEntry.arguments?.getString("clientId")?.toLongOrNull() ?: 0L
                             val name = backStackEntry.arguments?.getString("clientName") ?: ""
-                            ClientDetailScreen(
-                                clientId = id,
-                                clientName = name,
-                                onBackClick = { navController.popBackStack() }
-                            )
+                            ClientDetailScreen(clientId = id, clientName = name, onBackClick = { navController.popBackStack() })
                         }
+                        
                         composable("templates") {
                             TemplateScreen(
-                                onMacroClick = { id, name ->
-                                    navController.navigate("macro_detail/$id/$name")
-                                }
+                                onMacroClick = { id, name -> navController.navigate("macro_detail/$id/$name") }
                             )
                         }
+                        
                         composable("macro_detail/{macroId}/{macroName}") { backStackEntry ->
                             val id = backStackEntry.arguments?.getString("macroId")?.toLongOrNull() ?: 0L
                             val name = backStackEntry.arguments?.getString("macroName") ?: ""
                             MacroDetailScreen(
-                                macroId = id,
-                                macroName = name,
+                                macroId = id, 
+                                macroName = name, 
+                                onBackClick = { navController.popBackStack() },
+                                onWorkoutClick = { workoutId, workoutName ->
+                                    navController.navigate("workout_detail/$workoutId/$workoutName")
+                                }
+                            )
+                        }
+                        
+                        // Новый экран: Детали тренировки (Упражнения)
+                        composable("workout_detail/{workoutId}/{workoutName}") { backStackEntry ->
+                            val id = backStackEntry.arguments?.getString("workoutId")?.toLongOrNull() ?: 0L
+                            val name = backStackEntry.arguments?.getString("workoutName") ?: ""
+                            WorkoutDetailScreen(
+                                workoutId = id,
+                                workoutName = name,
                                 onBackClick = { navController.popBackStack() }
                             )
                         }
