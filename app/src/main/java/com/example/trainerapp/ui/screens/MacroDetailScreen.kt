@@ -15,7 +15,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelProvider // <--- ВОТ ЭТОГО НЕ ХВАТАЛО
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.trainerapp.data.local.AppDatabase
@@ -50,7 +50,6 @@ class MacroDetailViewModel(application: Application, macroId: Long) : AndroidVie
         val name = _workoutName.value.trim()
         if (name.isNotEmpty()) {
             viewModelScope.launch {
-                // Временно используем macroId как mesocycleId
                 dao.insertWorkout(Workout(mesocycleId = macroId, dayNumber = currentCount + 1, name = name))
                 toggleDialog()
             }
@@ -62,7 +61,7 @@ class MacroDetailViewModel(application: Application, macroId: Long) : AndroidVie
 class MacroDetailViewModelFactory(
     private val application: Application,
     private val macroId: Long
-) : ViewModelProvider.Factory {
+) : ViewModelProvider.Factory { // <--- Здесь теперь используется импортированный класс
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(MacroDetailViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
