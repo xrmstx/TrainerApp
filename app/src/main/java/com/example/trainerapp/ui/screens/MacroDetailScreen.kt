@@ -26,8 +26,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-// ViewModel для экрана шаблона
-class MacroDetailViewModel(application: Application, macroId: Long) : AndroidViewModel(application) {
+class MacroDetailViewModel(application: Application, val macroId: Long) : AndroidViewModel(application) {
     private val dao = AppDatabase.getDatabase(application).appDao()
 
     val workouts = dao.getWorkoutsForMacro(macroId)
@@ -58,7 +57,6 @@ class MacroDetailViewModel(application: Application, macroId: Long) : AndroidVie
     }
 }
 
-// Фабрика для создания ViewModel с параметром macroId
 class MacroDetailViewModelFactory(
     private val application: Application,
     private val macroId: Long
@@ -78,7 +76,7 @@ fun MacroDetailScreen(
     macroId: Long,
     macroName: String,
     onBackClick: () -> Unit,
-    onWorkoutClick: (Long, String) -> Unit // <-- ДОБАВИЛИ ПАРАМЕТР ДЛЯ ПЕРЕХОДА
+    onWorkoutClick: (Long, String) -> Unit
 ) {
     val context = LocalContext.current
     val application = context.applicationContext as Application
@@ -150,7 +148,7 @@ fun MacroDetailScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 4.dp)
-                                .clickable { onWorkoutClick(workout.id, workout.name) } // <-- ДОБАВИЛИ КЛИК
+                                .clickable { onWorkoutClick(workout.id, workout.name) }
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text("День ${workout.dayNumber}", style = MaterialTheme.typography.labelMedium)
