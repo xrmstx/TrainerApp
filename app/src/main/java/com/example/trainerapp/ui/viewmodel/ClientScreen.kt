@@ -1,5 +1,6 @@
 package com.example.trainerapp.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -13,7 +14,10 @@ import com.example.trainerapp.ui.viewmodel.ClientViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ClientScreen(viewModel: ClientViewModel = viewModel()) {
+fun ClientScreen(
+    onClientClick: (Long, String) -> Unit, // <-- Добавили параметр для перехода
+    viewModel: ClientViewModel = viewModel()
+) {
     val clients by viewModel.clients.collectAsState(initial = emptyList())
     val newClientName by viewModel.newClientName.collectAsState()
 
@@ -28,7 +32,7 @@ fun ClientScreen(viewModel: ClientViewModel = viewModel()) {
                 .padding(paddingValues)
                 .padding(16.dp)
         ) {
-            // Поле ввода и кнопка добавления
+            // Поле ввода и кнопка
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -57,6 +61,7 @@ fun ClientScreen(viewModel: ClientViewModel = viewModel()) {
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 4.dp)
+                                .clickable { onClientClick(client.id, client.name) } // <-- Клик по клиенту
                         ) {
                             Text(
                                 text = client.name,
