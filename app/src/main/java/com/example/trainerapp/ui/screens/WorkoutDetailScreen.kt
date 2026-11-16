@@ -26,21 +26,23 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-// ViewModel для экрана с упражнениями
 class WorkoutDetailViewModel(application: Application, workoutId: Long) : AndroidViewModel(application) {
     private val dao = AppDatabase.getDatabase(application).appDao()
 
-    // Для простоты мы создаем один "блок" на всю тренировку, чтобы не усложнять архитектуру суперсетов прямо сейчас
-    private val _blockId = MutableStateFlow<Long?>(null)
-    val exercises = _blockId.flatMapLatest { id ->
-        if (id != null) dao.getExercisesForBlock(id) else kotlinx.coroutines.flow.flowOf(emptyList())
-    }
+    // Используем MutableStateFlow для хранения списка упражнений в памяти
+    private val _exercises = MutableStateFlow<List<TemplateExercise>>(emptyList())
+    val exercises: StateFlow<List<TemplateExercise>> = _exercises.asStateFlow()
 
-    // Инициализация блока при старте (если его нет)
+    private var currentBlockId: Long? = null
+
     init {
         viewModelScope.launch {
+            // Создаем блок (если его нет) и загружаем упражнения
             val blockId = dao.insertExerciseBlock(ExerciseBlock(workoutId = workoutId))
-            _blockId.value = blockId
+            currentBlockId = blockId
+            dao.getExercisesForBlock(blockId).collect { list ->
+                _exercises.value = list
+            }
         }
     }
 
@@ -70,7 +72,7 @@ class WorkoutDetailViewModel(application: Application, workoutId: Long) : Androi
         val name = _exName.value.trim()
         val sets = _exSets.value.trim().toIntOrNull() ?: 0
         val reps = _exReps.value.trim()
-        val blockId = _blockId.value
+        val blockId = currentBlockId
 
         if (name.isNotEmpty() && sets > 0 && reps.isNotEmpty() && blockId != null) {
             viewModelScope.launch {
@@ -116,7 +118,7 @@ fun WorkoutDetailScreen(
         factory = WorkoutDetailViewModelFactory(application, workoutId)
     )
 
-    val exercises by viewModel.exercises.collectAsState(initial = emptyList())
+    val exercises by viewModel.exercises.collectAsState()
     val showDialog by viewModel.showDialog.collectAsState()
     
     val exName by viewModel.exName.collectAsState()
