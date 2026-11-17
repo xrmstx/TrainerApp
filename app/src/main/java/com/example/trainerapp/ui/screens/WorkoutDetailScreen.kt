@@ -21,24 +21,46 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.trainerapp.data.local.AppDatabase
 import com.example.trainerapp.data.model.ExerciseBlock
 import com.example.trainerapp.data.model.TemplateExercise
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class WorkoutDetailViewModel(application: Application, workoutId: Long) : AndroidViewModel(application) {
     private val dao = AppDatabase.getDatabase(application).appDao()
 
-    private val _exercises = MutableStateFlow<List<TemplateExercise>>(emptyList())
-    val exercises: StateFlow<List<TemplateExercise>> = _exercises.asStateFlow()
+    // 1. Создаем StateFlow для ID блока. Изначально null.
+    private val _blockId = MutableStateFlow<Long?>(null)
 
-    private var currentBlockId: Long? = null
+    // 2. Реактивно связываем ID блока с потоком упражнений из базы
+    val exercises: StateFlow<List<TemplateExercise>> = _blockId
+        .flatMapLatest { id ->
+            if (id != null) {
+                dao.getExercisesForBlock(id) // Возвращает Flow<List<TemplateExercise>>
+            } else {
+                flowOf(emptyList()) // Если блока нет, список пуст
+            }
+        }
+        .let { flow ->
+            // Превращаем Flow в StateFlow для Compose
+            val stateFlow = MutableStateFlow<List<TemplateExercise>>(emptyList())
+            viewModelScope.launch {
+                flow.collect { list ->
+                    stateFlow.value = list
+                }
+            }
+            stateFlow.asStateFlow()
+        }
 
-    // Мы больше не создаем блок в init, чтобы не было краша при пустом списке
+    // Инициализация: создаем блок в базе данных при старте
     init {
         viewModelScope.launch {
-            // Пытаемся загрузить существующие упражнения (если блок уже был создан)
-            // Для простоты мы создадим блок при первом добавлении упражнения
+            val blockId = dao.insertExerciseBlock(ExerciseBlock(workoutId = workoutId))
+            _blockId.value = blockId // Как только блок создан, Flow начнет загружать упражнения
         }
     }
 
@@ -68,18 +90,13 @@ class WorkoutDetailViewModel(application: Application, workoutId: Long) : Androi
         val name = _exName.value.trim()
         val sets = _exSets.value.trim().toIntOrNull() ?: 0
         val reps = _exReps.value.trim()
+        val blockId = _blockId.value
 
-        if (name.isNotEmpty() && sets > 0 && reps.isNotEmpty()) {
+        if (name.isNotEmpty() && sets > 0 && reps.isNotEmpty() && blockId != null) {
             viewModelScope.launch {
-                // 1. Создаем блок (если его еще нет) прямо перед добавлением упражнения
-                if (currentBlockId == null) {
-                    currentBlockId = dao.insertExerciseBlock(ExerciseBlock(workoutId = workoutId))
-                }
-
-                // 2. Добавляем упражнение
                 dao.insertTemplateExercise(
                     TemplateExercise(
-                        blockId = currentBlockId!!,
+                        blockId = blockId,
                         exerciseName = name,
                         order = currentCount + 1,
                         targetSets = sets,
@@ -87,20 +104,6 @@ class WorkoutDetailViewModel(application: Application, workoutId: Long) : Androi
                         targetWeight = null
                     )
                 )
-                
-                // 3. Обновляем список в памяти
-                _exercises.value = dao.getExercisesForBlock(currentBlockId!!).let { flow ->
-                    // Поскольку Flow асинхронный, просто запрашиваем список еще раз
-                    emptyList() // Заглушка, ниже мы перезапишем список
-                }
-
-                // Простой способ обновить список без сложных Flow-манипуляций:
-                // (В реальном проекте лучше использовать Flow из DAO, но для MVP так надежнее)
-                val newList = mutableListOf<TemplateExercise>()
-                // К сожалению, у нас нет прямого синхронного метода в DAO для получения списка.
-                // Поэтому мы просто добавим в текущий список (это работает для UI)
-                // В следующем обновлении мы сделаем это правильно через Flow.
-                
                 toggleDialog()
             }
         }
