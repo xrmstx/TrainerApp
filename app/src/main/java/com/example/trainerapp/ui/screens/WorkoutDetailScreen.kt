@@ -21,46 +21,32 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.trainerapp.data.local.AppDatabase
 import com.example.trainerapp.data.model.ExerciseBlock
 import com.example.trainerapp.data.model.TemplateExercise
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class WorkoutDetailViewModel(application: Application, workoutId: Long) : AndroidViewModel(application) {
     private val dao = AppDatabase.getDatabase(application).appDao()
 
-    // 1. Создаем StateFlow для ID блока. Изначально null.
+    // Состояние для списка упражнений
+    private val _exercises = MutableStateFlow<List<TemplateExercise>>(emptyList())
+    val exercises: StateFlow<List<TemplateExercise>> = _exercises.asStateFlow()
+
+    // Состояние для ID блока
     private val _blockId = MutableStateFlow<Long?>(null)
 
-    // 2. Реактивно связываем ID блока с потоком упражнений из базы
-    val exercises: StateFlow<List<TemplateExercise>> = _blockId
-        .flatMapLatest { id ->
-            if (id != null) {
-                dao.getExercisesForBlock(id) // Возвращает Flow<List<TemplateExercise>>
-            } else {
-                flowOf(emptyList()) // Если блока нет, список пуст
-            }
-        }
-        .let { flow ->
-            // Превращаем Flow в StateFlow для Compose
-            val stateFlow = MutableStateFlow<List<TemplateExercise>>(emptyList())
-            viewModelScope.launch {
-                flow.collect { list ->
-                    stateFlow.value = list
-                }
-            }
-            stateFlow.asStateFlow()
-        }
-
-    // Инициализация: создаем блок в базе данных при старте
     init {
         viewModelScope.launch {
+            // 1. Создаем блок для этой тренировки
             val blockId = dao.insertExerciseBlock(ExerciseBlock(workoutId = workoutId))
-            _blockId.value = blockId // Как только блок создан, Flow начнет загружать упражнения
+            _blockId.value = blockId
+
+            // 2. Начинаем слушать изменения упражнений в этом блоке
+            dao.getExercisesForBlock(blockId).collectLatest { list ->
+                _exercises.value = list
+            }
         }
     }
 
@@ -86,7 +72,7 @@ class WorkoutDetailViewModel(application: Application, workoutId: Long) : Androi
         _exReps.value = ""
     }
 
-    fun addExercise(currentCount: Int) {
+    fun addExercise() {
         val name = _exName.value.trim()
         val sets = _exSets.value.trim().toIntOrNull() ?: 0
         val reps = _exReps.value.trim()
@@ -98,7 +84,7 @@ class WorkoutDetailViewModel(application: Application, workoutId: Long) : Androi
                     TemplateExercise(
                         blockId = blockId,
                         exerciseName = name,
-                        order = currentCount + 1,
+                        order = _exercises.value.size + 1,
                         targetSets = sets,
                         targetReps = reps,
                         targetWeight = null
@@ -159,7 +145,7 @@ fun WorkoutDetailScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { viewModel.addExercise(exercises.size) }) {
+                TextButton(onClick = { viewModel.addExercise() }) {
                     Text("Добавить")
                 }
             },
