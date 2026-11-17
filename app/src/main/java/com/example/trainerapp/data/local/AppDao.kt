@@ -1,53 +1,160 @@
-package com.example.trainerapp.data.local
+package com.example.trainerapp.ui.screens
 
-import androidx.room.*
-import com.example.trainerapp.data.model.*
-import kotlinx.coroutines.flow.Flow
+import android.app.Application
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.trainerapp.data.local.AppDatabase
+import com.example.trainerapp.data.model.ClientProgram
+import com.example.trainerapp.data.model.Macrocycle
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
-@Dao
-interface AppDao {
-    // --- Клиенты ---
-    @Query("SELECT * FROM clients ORDER BY name ASC")
-    fun getAllClients(): Flow<List<Client>>
+class ClientDetailViewModel(application: Application, clientId: Long) : AndroidViewModel(application) {
+    private val dao = AppDatabase.getDatabase(application).appDao()
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertClient(client: Client): Long
+    val programs = dao.getProgramsForClient(clientId)
+    val templates = dao.getAllMacrocycles()
 
-    // --- Макроциклы (Шаблоны) ---
-    @Query("SELECT * FROM macrocycles")
-    fun getAllMacrocycles(): Flow<List<Macrocycle>>
+    private val _showDialog = MutableStateFlow(false)
+    val showDialog: StateFlow<Boolean> = _showDialog.asStateFlow()
 
-    @Insert
-    suspend fun insertMacrocycle(macrocycle: Macrocycle): Long
+    fun toggleDialog() { _showDialog.value = !_showDialog.value }
 
-    // --- Тренировки (Дни внутри шаблона) ---
-    @Query("SELECT * FROM workouts WHERE mesocycleId = :macroId ORDER BY dayNumber ASC")
-    fun getWorkoutsForMacro(macroId: Long): Flow<List<Workout>>
+    fun assignProgram(macrocycle: Macrocycle) {
+        viewModelScope.launch {
+            // Создаем новую программу для клиента на основе выбранного шаблона
+            dao.insertClientProgram(
+                ClientProgram(
+                    clientId = clientId,
+                    templateWorkoutId = macrocycle.id, // Временно сохраняем ID макроцикла сюда
+                    weekNumber = 1,
+                    status = "ACTIVE"
+                )
+            )
+            toggleDialog()
+        }
+    }
+}
 
-    @Insert
-    suspend fun insertWorkout(workout: Workout): Long
+class ClientDetailViewModelFactory(
+    private val application: Application,
+    private val clientId: Long
+) : ViewModelProvider.Factory {
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(ClientDetailViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST")
+            return ClientDetailViewModel(application, clientId) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
+    }
+}
 
-    // --- Упражнения в шаблоне ---
-    @Query("SELECT * FROM template_exercises WHERE blockId = :blockId ORDER BY `order` ASC")
-    fun getExercisesForBlock(blockId: Long): Flow<List<TemplateExercise>>
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ClientDetailScreen(
+    clientId: Long,
+    clientName: String,
+    onBackClick: () -> Unit
+) {
+    val context = LocalContext.current
+    val application = context.applicationContext as Application
+    val viewModel: ClientDetailViewModel = viewModel(
+        factory = ClientDetailViewModelFactory(application, clientId)
+    )
 
-    @Insert
-    suspend fun insertExerciseBlock(block: ExerciseBlock): Long
+    val programs by viewModel.programs.collectAsState(initial = emptyList())
+    val templates by viewModel.templates.collectAsState(initial = emptyList())
+    val showDialog by viewModel.showDialog.collectAsState()
 
-    @Insert
-    suspend fun insertTemplateExercise(exercise: TemplateExercise): Long
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { viewModel.toggleDialog() },
+            title = { Text("Выберите шаблон") },
+            text = {
+                if (templates.isEmpty()) {
+                    Text("У вас нет созданных шаблонов. Сначала создайте шаблон во вкладке 'Шаблоны'.")
+                } else {
+                    LazyColumn {
+                        items(templates) { macro ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                                    .clickable { viewModel.assignProgram(macro) }
+                            ) {
+                                Text(macro.name, modifier = Modifier.padding(16.dp))
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.toggleDialog() }) { Text("Отмена") }
+            }
+        )
+    }
 
-    // --- Программы клиентов ---
-    @Query("SELECT * FROM client_programs WHERE clientId = :clientId ORDER BY weekNumber ASC")
-    fun getProgramsForClient(clientId: Long): Flow<List<ClientProgram>>
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(clientName) },
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
+                    }
+                }
+            )
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(16.dp)
+        ) {
+            Button(
+                onClick = { viewModel.toggleDialog() },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Назначить программу")
+            }
 
-    @Insert
-    suspend fun insertClientProgram(program: ClientProgram): Long
+            Spacer(modifier = Modifier.height(16.dp))
 
-    // --- Логи упражнений ---
-    @Query("SELECT * FROM exercise_logs WHERE clientProgramId = :clientProgramId")
-    suspend fun getLogsForProgram(clientProgramId: Long): List<ExerciseLog>
-
-    @Insert
-    suspend fun insertExerciseLog(log: ExerciseLog): Long
+            Text("Активные программы:", style = MaterialTheme.typography.titleMedium)
+            
+            if (programs.isEmpty()) {
+                Text("Нет назначенных программ", style = MaterialTheme.typography.bodyMedium)
+            } else {
+                LazyColumn {
+                    items(programs) { prog ->
+                        Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text("Программа ID: ${prog.templateWorkoutId}", style = MaterialTheme.typography.bodyLarge)
+                                Text("Неделя: ${prog.weekNumber}", style = MaterialTheme.typography.bodyMedium)
+                                Text("Статус: ${prog.status}", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
