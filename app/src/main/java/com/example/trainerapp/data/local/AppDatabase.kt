@@ -7,8 +7,12 @@ import androidx.room.RoomDatabase
 import com.example.trainerapp.data.model.*
 
 @Database(
-    entities = [Client::class, Macrocycle::class, Mesocycle::class, Workout::class, ExerciseBlock::class, TemplateExercise::class, ClientProgram::class, ExerciseLog::class],
-    version = 1,
+    entities = [
+        Client::class, Macrocycle::class, Mesocycle::class,
+        Workout::class, ExerciseBlock::class, TemplateExercise::class,
+        ClientProgram::class, ExerciseLog::class
+    ],
+    version = 2, // <--- Подняли версию
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -24,7 +28,9 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "fitness_database"
-                ).build()
+                )
+                .fallbackToDestructiveMigration() // <--- Автоматический сброс при несовпадении
+                .build()
                 INSTANCE = instance
                 instance
             }
