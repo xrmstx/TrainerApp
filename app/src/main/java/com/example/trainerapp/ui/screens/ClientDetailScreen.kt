@@ -1,13 +1,70 @@
 package com.example.trainerapp.ui.screens
 
+import android.app.Application
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.trainerapp.data.local.AppDatabase
+import com.example.trainerapp.data.model.ClientProgram
+import com.example.trainerapp.data.model.Macrocycle
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+
+class ClientDetailViewModel(application: Application, clientId: Long) : AndroidViewModel(application) {
+    private val dao = AppDatabase.getDatabase(application).appDao()
+
+    val programs = dao.getProgramsForClient(clientId)
+    val templates = dao.getAllMacrocycles()
+
+    private val _showDialog = MutableStateFlow(false)
+    val showDialog: StateFlow<Boolean> = _showDialog.asStateFlow()
+
+    fun toggleDialog() { _showDialog.value = !_showDialog.value }
+
+    fun assignProgram(macrocycle: Macrocycle) {
+        viewModelScope.launch {
+            // Создаем новую программу для клиента на основе выбранного шаблона
+            dao.insertClientProgram(
+                ClientProgram(
+                    clientId = clientId,
+                    templateWorkoutId = macrocycle.id, // Временно сохраняем ID макроцикла сюда
+                    weekNumber = 1,
+                    status = "ACTIVE"
+                )
+            )
+            toggleDialog()
+        }
+    }
+}
+
+class ClientDetailViewModelFactory(
+    private val application: Application,
+    private val clientId: Long
+) : ViewModelProvider.Factory {
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(ClientDetailViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST")
+            return ClientDetailViewModel(application, clientId) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -16,6 +73,44 @@ fun ClientDetailScreen(
     clientName: String,
     onBackClick: () -> Unit
 ) {
+    val context = LocalContext.current
+    val application = context.applicationContext as Application
+    val viewModel: ClientDetailViewModel = viewModel(
+        factory = ClientDetailViewModelFactory(application, clientId)
+    )
+
+    val programs by viewModel.programs.collectAsState(initial = emptyList())
+    val templates by viewModel.templates.collectAsState(initial = emptyList())
+    val showDialog by viewModel.showDialog.collectAsState()
+
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { viewModel.toggleDialog() },
+            title = { Text("Выберите шаблон") },
+            text = {
+                if (templates.isEmpty()) {
+                    Text("У вас нет созданных шаблонов. Сначала создайте шаблон во вкладке 'Шаблоны'.")
+                } else {
+                    LazyColumn {
+                        items(templates) { macro ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                                    .clickable { viewModel.assignProgram(macro) }
+                            ) {
+                                Text(macro.name, modifier = Modifier.padding(16.dp))
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.toggleDialog() }) { Text("Отмена") }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -32,17 +127,33 @@ fun ClientDetailScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+                .padding(16.dp)
         ) {
-            Text("Программа клиента: $clientName", style = MaterialTheme.typography.titleLarge)
+            Button(
+                onClick = { viewModel.toggleDialog() },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Назначить программу")
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
-            Text("ID клиента: $clientId", style = MaterialTheme.typography.bodyMedium)
-            Spacer(modifier = Modifier.height(32.dp))
+
+            Text("Активные программы:", style = MaterialTheme.typography.titleMedium)
             
-            Button(onClick = { /* Позже добавим логику */ }) {
-                Text("Добавить тренировку (Скоро)")
+            if (programs.isEmpty()) {
+                Text("Нет назначенных программ", style = MaterialTheme.typography.bodyMedium)
+            } else {
+                LazyColumn {
+                    items(programs) { prog ->
+                        Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text("Программа ID: ${prog.templateWorkoutId}", style = MaterialTheme.typography.bodyLarge)
+                                Text("Неделя: ${prog.weekNumber}", style = MaterialTheme.typography.bodyMedium)
+                                Text("Статус: ${prog.status}", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
             }
         }
     }
