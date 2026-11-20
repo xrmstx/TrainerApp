@@ -39,11 +39,9 @@ interface AppDao {
     @Insert
     suspend fun insertClientProgram(program: ClientProgram): Long
 
-    // --- НОВЫЕ МЕТОДЫ ---
     @Query("SELECT * FROM client_programs WHERE id = :programId")
     fun getProgramById(programId: Long): Flow<ClientProgram?>
 
-    // Получаем упражнения для конкретной тренировки (через блок)
     @Query("""
         SELECT te.* FROM template_exercises te
         INNER JOIN exercise_blocks eb ON te.blockId = eb.id
