@@ -34,13 +34,22 @@ class MainActivity : ComponentActivity() {
                                     icon = { Icon(Icons.Default.Person, contentDescription = null) },
                                     label = { Text("Клиенты") },
                                     selected = currentRoute == "clients",
-                                    onClick = { navController.navigate("clients") { popUpTo("clients") { inclusive = true } } }
+                                    onClick = { 
+                                        navController.navigate("clients") { 
+                                            popUpTo("clients") { inclusive = true } 
+                                        } 
+                                    }
                                 )
                                 NavigationBarItem(
                                     icon = { Icon(Icons.Default.List, contentDescription = null) },
                                     label = { Text("Шаблоны") },
                                     selected = currentRoute == "templates",
-                                    onClick = { navController.navigate("templates") { popUpTo("clients") { inclusive = false }; launchSingleTop = true } }
+                                    onClick = { 
+                                        navController.navigate("templates") { 
+                                            popUpTo("clients") { inclusive = false }
+                                            launchSingleTop = true 
+                                        } 
+                                    }
                                 )
                             }
                         }
@@ -51,8 +60,13 @@ class MainActivity : ComponentActivity() {
                         startDestination = "clients",
                         modifier = Modifier.padding(innerPadding)
                     ) {
+                        // --- КЛИЕНТЫ ---
                         composable("clients") {
-                            ClientScreen(onClientClick = { id, name -> navController.navigate("client_detail/$id/$name") })
+                            ClientScreen(
+                                onClientClick = { id, name -> 
+                                    navController.navigate("client_detail/$id/$name") 
+                                }
+                            )
                         }
                         composable("client_detail/{clientId}/{clientName}") { backStackEntry ->
                             val id = backStackEntry.arguments?.getString("clientId")?.toLongOrNull() ?: 0L
@@ -87,9 +101,14 @@ class MainActivity : ComponentActivity() {
                                 onBackClick = { navController.popBackStack() }
                             )
                         }
-                        
+
+                        // --- ШАБЛОНЫ (МАКРОЦИКЛЫ) ---
                         composable("templates") {
-                            TemplateScreen(onMacroClick = { id, name -> navController.navigate("macro_detail/$id/$name") })
+                            TemplateScreen(
+                                onMacroClick = { id, name -> 
+                                    navController.navigate("macro_detail/$id/$name") 
+                                }
+                            )
                         }
                         composable("macro_detail/{macroId}/{macroName}") { backStackEntry ->
                             val id = backStackEntry.arguments?.getString("macroId")?.toLongOrNull() ?: 0L
@@ -98,13 +117,19 @@ class MainActivity : ComponentActivity() {
                                 macroId = id, 
                                 macroName = name, 
                                 onBackClick = { navController.popBackStack() },
-                                onWorkoutClick = { workoutId, workoutName -> navController.navigate("workout_detail/$workoutId/$workoutName") }
+                                onWorkoutClick = { workoutId, workoutName -> 
+                                    navController.navigate("workout_detail/$workoutId/$workoutName") 
+                                }
                             )
                         }
                         composable("workout_detail/{workoutId}/{workoutName}") { backStackEntry ->
                             val id = backStackEntry.arguments?.getString("workoutId")?.toLongOrNull() ?: 0L
                             val name = backStackEntry.arguments?.getString("workoutName") ?: ""
-                            WorkoutDetailScreen(workoutId = id, workoutName = name, onBackClick = { navController.popBackStack() })
+                            WorkoutDetailScreen(
+                                workoutId = id, 
+                                workoutName = name, 
+                                onBackClick = { navController.popBackStack() }
+                            )
                         }
                     }
                 }
