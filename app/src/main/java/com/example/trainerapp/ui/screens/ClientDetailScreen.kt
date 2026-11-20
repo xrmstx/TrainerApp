@@ -28,7 +28,6 @@ import kotlinx.coroutines.launch
 
 class ClientDetailViewModel(application: Application, val clientId: Long) : AndroidViewModel(application) {
     private val dao = AppDatabase.getDatabase(application).appDao()
-
     val programs = dao.getProgramsForClient(clientId)
     val templates = dao.getAllMacrocycles()
 
@@ -71,13 +70,11 @@ fun ClientDetailScreen(
     clientId: Long,
     clientName: String,
     onBackClick: () -> Unit,
-    onProgramClick: (Long) -> Unit // Переход на программу
+    onProgramClick: (Long) -> Unit
 ) {
     val context = LocalContext.current
     val application = context.applicationContext as Application
-    val viewModel: ClientDetailViewModel = viewModel(
-        factory = ClientDetailViewModelFactory(application, clientId)
-    )
+    val viewModel: ClientDetailViewModel = viewModel(factory = ClientDetailViewModelFactory(application, clientId))
 
     val programs by viewModel.programs.collectAsState(initial = emptyList())
     val templates by viewModel.templates.collectAsState(initial = emptyList())
@@ -88,26 +85,19 @@ fun ClientDetailScreen(
             onDismissRequest = { viewModel.toggleDialog() },
             title = { Text("Выберите шаблон") },
             text = {
-                if (templates.isEmpty()) {
-                    Text("У вас нет созданных шаблонов.")
-                } else {
-                    LazyColumn {
-                        items(templates) { macro ->
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp)
-                                    .clickable { viewModel.assignProgram(macro) }
-                            ) {
-                                Text(macro.name, modifier = Modifier.padding(16.dp))
-                            }
+                if (templates.isEmpty()) Text("У вас нет созданных шаблонов.")
+                else LazyColumn {
+                    items(templates) { macro ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                                .clickable { viewModel.assignProgram(macro) }
+                        ) {
+                            Text(macro.name, modifier = Modifier.padding(16.dp))
                         }
                     }
                 }
             },
-            confirmButton = {
-                TextButton(onClick = { viewModel.toggleDialog() }) { Text("Отмена") }
-            }
+            confirmButton = { TextButton(onClick = { viewModel.toggleDialog() }) { Text("Отмена") } }
         )
     }
 
@@ -115,41 +105,24 @@ fun ClientDetailScreen(
         topBar = {
             TopAppBar(
                 title = { Text(clientName) },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
-                    }
-                }
+                navigationIcon = { IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, contentDescription = "Назад") } }
             )
         }
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp)
-        ) {
-            Button(
-                onClick = { viewModel.toggleDialog() },
-                modifier = Modifier.fillMaxWidth()
-            ) {
+        Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)) {
+            Button(onClick = { viewModel.toggleDialog() }, modifier = Modifier.fillMaxWidth()) {
                 Text("Назначить программу")
             }
-
             Spacer(modifier = Modifier.height(16.dp))
-
             Text("Активные программы:", style = MaterialTheme.typography.titleMedium)
-            
             if (programs.isEmpty()) {
                 Text("Нет назначенных программ", style = MaterialTheme.typography.bodyMedium)
             } else {
                 LazyColumn {
                     items(programs) { prog ->
                         Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp)
-                                .clickable { onProgramClick(prog.id) } // Клик по программе
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                                .clickable { onProgramClick(prog.id) }
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text("Программа (Шаблон ID: ${prog.templateWorkoutId})", style = MaterialTheme.typography.bodyLarge)
