@@ -36,11 +36,10 @@ data class Mesocycle(
     val weeks: Int
 )
 
-// ВАЖНО: Убрали ForeignKey для mesocycleId, чтобы избежать краша
 @Entity(tableName = "workouts")
 data class Workout(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val mesocycleId: Long, // Сюда мы передаем macroId
+    val mesocycleId: Long,
     val dayNumber: Int,
     val name: String
 )
