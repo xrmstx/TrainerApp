@@ -12,7 +12,7 @@ import com.example.trainerapp.data.model.*
         Workout::class, ExerciseBlock::class, TemplateExercise::class,
         ClientProgram::class, ExerciseLog::class
     ],
-    version = 2, // <--- Подняли версию
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -29,7 +29,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "fitness_database"
                 )
-                .fallbackToDestructiveMigration() // <--- Автоматический сброс при несовпадении
+                .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance
                 instance
