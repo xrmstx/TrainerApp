@@ -28,28 +28,22 @@ class MainActivity : ComponentActivity() {
 
                 Scaffold(
                     bottomBar = {
-                        NavigationBar {
-                            NavigationBarItem(
-                                icon = { Icon(Icons.Default.Person, contentDescription = null) },
-                                label = { Text("Клиенты") },
-                                selected = currentRoute?.startsWith("client") == true || currentRoute == "clients",
-                                onClick = {
-                                    navController.navigate("clients") {
-                                        popUpTo("clients") { inclusive = true }
-                                    }
-                                }
-                            )
-                            NavigationBarItem(
-                                icon = { Icon(Icons.Default.List, contentDescription = null) },
-                                label = { Text("Шаблоны") },
-                                selected = currentRoute?.startsWith("templates") == true || currentRoute?.startsWith("macro_detail") == true || currentRoute?.startsWith("workout_detail") == true,
-                                onClick = {
-                                    navController.navigate("templates") {
-                                        popUpTo("clients") { inclusive = false }
-                                        launchSingleTop = true
-                                    }
-                                }
-                            )
+                        // Показываем нижнее меню только на главных экранах
+                        if (currentRoute == "clients" || currentRoute == "templates") {
+                            NavigationBar {
+                                NavigationBarItem(
+                                    icon = { Icon(Icons.Default.Person, contentDescription = null) },
+                                    label = { Text("Клиенты") },
+                                    selected = currentRoute == "clients",
+                                    onClick = { navController.navigate("clients") { popUpTo("clients") { inclusive = true } } }
+                                )
+                                NavigationBarItem(
+                                    icon = { Icon(Icons.Default.List, contentDescription = null) },
+                                    label = { Text("Шаблоны") },
+                                    selected = currentRoute == "templates",
+                                    onClick = { navController.navigate("templates") { popUpTo("clients") { inclusive = false }; launchSingleTop = true } }
+                                )
+                            }
                         }
                     }
                 ) { innerPadding ->
@@ -59,22 +53,44 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.padding(innerPadding)
                     ) {
                         composable("clients") {
-                            ClientScreen(
-                                onClientClick = { id, name -> navController.navigate("client_detail/$id/$name") }
-                            )
+                            ClientScreen(onClientClick = { id, name -> navController.navigate("client_detail/$id/$name") })
                         }
                         composable("client_detail/{clientId}/{clientName}") { backStackEntry ->
                             val id = backStackEntry.arguments?.getString("clientId")?.toLongOrNull() ?: 0L
                             val name = backStackEntry.arguments?.getString("clientName") ?: ""
-                            ClientDetailScreen(clientId = id, clientName = name, onBackClick = { navController.popBackStack() })
+                            ClientDetailScreen(
+                                clientId = id,
+                                clientName = name,
+                                onBackClick = { navController.popBackStack() },
+                                onProgramClick = { programId -> navController.navigate("client_program_detail/$programId") }
+                            )
                         }
-                        
-                        composable("templates") {
-                            TemplateScreen(
-                                onMacroClick = { id, name -> navController.navigate("macro_detail/$id/$name") }
+                        composable("client_program_detail/{programId}") { backStackEntry ->
+                            val programId = backStackEntry.arguments?.getString("programId")?.toLongOrNull() ?: 0L
+                            ClientProgramDetailScreen(
+                                clientProgramId = programId,
+                                onBackClick = { navController.popBackStack() },
+                                onWorkoutClick = { workoutId, workoutName -> 
+                                    navController.navigate("client_workout_log/$programId/$workoutId/$workoutName") 
+                                }
+                            )
+                        }
+                        composable("client_workout_log/{programId}/{workoutId}/{workoutName}") { backStackEntry ->
+                            val programId = backStackEntry.arguments?.getString("programId")?.toLongOrNull() ?: 0L
+                            val workoutId = backStackEntry.arguments?.getString("workoutId")?.toLongOrNull() ?: 0L
+                            val workoutName = backStackEntry.arguments?.getString("workoutName") ?: ""
+                            ClientWorkoutLogScreen(
+                                workoutId = workoutId,
+                                clientProgramId = programId,
+                                workoutName = workoutName,
+                                onBackClick = { navController.popBackStack() }
                             )
                         }
                         
+                        // Экраны шаблонов (без изменений)
+                        composable("templates") {
+                            TemplateScreen(onMacroClick = { id, name -> navController.navigate("macro_detail/$id/$name") })
+                        }
                         composable("macro_detail/{macroId}/{macroName}") { backStackEntry ->
                             val id = backStackEntry.arguments?.getString("macroId")?.toLongOrNull() ?: 0L
                             val name = backStackEntry.arguments?.getString("macroName") ?: ""
@@ -82,21 +98,13 @@ class MainActivity : ComponentActivity() {
                                 macroId = id, 
                                 macroName = name, 
                                 onBackClick = { navController.popBackStack() },
-                                onWorkoutClick = { workoutId, workoutName ->
-                                    navController.navigate("workout_detail/$workoutId/$workoutName")
-                                }
+                                onWorkoutClick = { workoutId, workoutName -> navController.navigate("workout_detail/$workoutId/$workoutName") }
                             )
                         }
-                        
-                        // Новый экран: Детали тренировки (Упражнения)
                         composable("workout_detail/{workoutId}/{workoutName}") { backStackEntry ->
                             val id = backStackEntry.arguments?.getString("workoutId")?.toLongOrNull() ?: 0L
                             val name = backStackEntry.arguments?.getString("workoutName") ?: ""
-                            WorkoutDetailScreen(
-                                workoutId = id,
-                                workoutName = name,
-                                onBackClick = { navController.popBackStack() }
-                            )
+                            WorkoutDetailScreen(workoutId = id, workoutName = name, onBackClick = { navController.popBackStack() })
                         }
                     }
                 }
