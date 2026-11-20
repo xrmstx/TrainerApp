@@ -28,19 +28,13 @@ import kotlinx.coroutines.launch
 class ClientProgramDetailViewModel(application: Application, clientProgramId: Long) : AndroidViewModel(application) {
     private val dao = AppDatabase.getDatabase(application).appDao()
 
-    // Получаем программу клиента, чтобы узнать ID шаблона
-    private val programFlow = dao.getProgramById(clientProgramId) // Нам нужен этот метод в DAO
-
-    // Пока делаем просто: получаем тренировки по templateWorkoutId (ID макроцикла)
-    // В реальном приложении тут будет копирование тренировок под клиента, но для MVP сойдет
+    private val programFlow = dao.getProgramById(clientProgramId)
     val workouts = MutableStateFlow<List<Workout>>(emptyList())
 
     init {
         viewModelScope.launch {
-            // Ждем, пока загрузится программа, и берем её templateWorkoutId
             programFlow.collect { prog ->
                 if (prog != null && prog.templateWorkoutId != null) {
-                    // Загружаем тренировки этого шаблона
                     dao.getWorkoutsForMacro(prog.templateWorkoutId).collect { list ->
                         workouts.value = list
                     }
