@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
@@ -13,7 +14,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -27,17 +27,16 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class ClientWorkoutLogViewModel(application: Application, workoutId: Long, clientProgramId: Long) : AndroidViewModel(application) {
+class ClientWorkoutLogViewModel(application: Application, workoutId: Long, val clientProgramId: Long) : AndroidViewModel(application) {
     private val dao = AppDatabase.getDatabase(application).appDao()
 
-    val exercises = MutableStateFlow<List<TemplateExercise>>(emptyList())
+    private val _exercises = MutableStateFlow<List<TemplateExercise>>(emptyList())
+    val exercises: StateFlow<List<TemplateExercise>> = _exercises.asStateFlow()
 
     init {
         viewModelScope.launch {
-            // Для простоты мы берем первый блок упражнений этой тренировки
-            // В реальном приложении тут будет более сложная логика
             dao.getExercisesForWorkout(workoutId).collect { list ->
-                exercises.value = list
+                _exercises.value = list
             }
         }
     }
@@ -153,7 +152,6 @@ fun ClientWorkoutLogScreen(
                                 Button(
                                     onClick = { 
                                         viewModel.saveLog(ex, sets, reps, weight) 
-                                        // Очищаем поле веса после сохранения
                                         weight = ""
                                     },
                                     modifier = Modifier.align(Alignment.End)
