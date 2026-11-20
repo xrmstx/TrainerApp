@@ -31,7 +31,6 @@ fun TemplateScreen(
                 .padding(paddingValues)
                 .padding(16.dp)
         ) {
-            // Форма создания
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
                     value = name,
@@ -57,7 +56,6 @@ fun TemplateScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Список шаблонов
             if (macrocycles.isEmpty()) {
                 Text("Нет шаблонов. Создайте первый!", modifier = Modifier.align(Alignment.CenterHorizontally))
             } else {
