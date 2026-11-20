@@ -28,7 +28,6 @@ class MainActivity : ComponentActivity() {
 
                 Scaffold(
                     bottomBar = {
-                        // Показываем нижнее меню только на главных экранах
                         if (currentRoute == "clients" || currentRoute == "templates") {
                             NavigationBar {
                                 NavigationBarItem(
@@ -62,7 +61,9 @@ class MainActivity : ComponentActivity() {
                                 clientId = id,
                                 clientName = name,
                                 onBackClick = { navController.popBackStack() },
-                                onProgramClick = { programId -> navController.navigate("client_program_detail/$programId") }
+                                onProgramClick = { programId -> 
+                                    navController.navigate("client_program_detail/$programId") 
+                                }
                             )
                         }
                         composable("client_program_detail/{programId}") { backStackEntry ->
@@ -87,7 +88,6 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         
-                        // Экраны шаблонов (без изменений)
                         composable("templates") {
                             TemplateScreen(onMacroClick = { id, name -> navController.navigate("macro_detail/$id/$name") })
                         }
