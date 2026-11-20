@@ -25,15 +25,9 @@ fun ClientScreen(
         topBar = { TopAppBar(title = { Text("Мои клиенты") }) }
     ) { paddingValues ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp)
+            modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
                     value = newClientName,
                     onValueChange = { viewModel.onNameChange(it) },
@@ -45,25 +39,17 @@ fun ClientScreen(
                     Text("Добавить")
                 }
             }
-
             Spacer(modifier = Modifier.height(16.dp))
-
             if (clients.isEmpty()) {
                 Text("Список пуст. Добавьте первого клиента!", modifier = Modifier.align(Alignment.CenterHorizontally))
             } else {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
                     items(clients) { client ->
                         Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp)
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
                                 .clickable { onClientClick(client.id, client.name) }
                         ) {
-                            Text(
-                                text = client.name,
-                                modifier = Modifier.padding(16.dp),
-                                style = MaterialTheme.typography.bodyLarge
-                            )
+                            Text(client.name, modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.bodyLarge)
                         }
                     }
                 }
