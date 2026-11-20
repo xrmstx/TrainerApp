@@ -26,7 +26,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class ClientDetailViewModel(application: Application, clientId: Long) : AndroidViewModel(application) {
+class ClientDetailViewModel(application: Application, val clientId: Long) : AndroidViewModel(application) {
     private val dao = AppDatabase.getDatabase(application).appDao()
 
     val programs = dao.getProgramsForClient(clientId)
@@ -39,11 +39,10 @@ class ClientDetailViewModel(application: Application, clientId: Long) : AndroidV
 
     fun assignProgram(macrocycle: Macrocycle) {
         viewModelScope.launch {
-            // Создаем новую программу для клиента на основе выбранного шаблона
             dao.insertClientProgram(
                 ClientProgram(
                     clientId = clientId,
-                    templateWorkoutId = macrocycle.id, // Временно сохраняем ID макроцикла сюда
+                    templateWorkoutId = macrocycle.id,
                     weekNumber = 1,
                     status = "ACTIVE"
                 )
@@ -71,7 +70,8 @@ class ClientDetailViewModelFactory(
 fun ClientDetailScreen(
     clientId: Long,
     clientName: String,
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit,
+    onProgramClick: (Long) -> Unit // Переход на программу
 ) {
     val context = LocalContext.current
     val application = context.applicationContext as Application
@@ -89,7 +89,7 @@ fun ClientDetailScreen(
             title = { Text("Выберите шаблон") },
             text = {
                 if (templates.isEmpty()) {
-                    Text("У вас нет созданных шаблонов. Сначала создайте шаблон во вкладке 'Шаблоны'.")
+                    Text("У вас нет созданных шаблонов.")
                 } else {
                     LazyColumn {
                         items(templates) { macro ->
@@ -145,9 +145,14 @@ fun ClientDetailScreen(
             } else {
                 LazyColumn {
                     items(programs) { prog ->
-                        Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                                .clickable { onProgramClick(prog.id) } // Клик по программе
+                        ) {
                             Column(modifier = Modifier.padding(16.dp)) {
-                                Text("Программа ID: ${prog.templateWorkoutId}", style = MaterialTheme.typography.bodyLarge)
+                                Text("Программа (Шаблон ID: ${prog.templateWorkoutId})", style = MaterialTheme.typography.bodyLarge)
                                 Text("Неделя: ${prog.weekNumber}", style = MaterialTheme.typography.bodyMedium)
                                 Text("Статус: ${prog.status}", style = MaterialTheme.typography.bodySmall)
                             }
