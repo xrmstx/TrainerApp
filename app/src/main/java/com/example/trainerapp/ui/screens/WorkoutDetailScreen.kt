@@ -30,20 +30,15 @@ import kotlinx.coroutines.launch
 class WorkoutDetailViewModel(application: Application, workoutId: Long) : AndroidViewModel(application) {
     private val dao = AppDatabase.getDatabase(application).appDao()
 
-    // Состояние для списка упражнений
     private val _exercises = MutableStateFlow<List<TemplateExercise>>(emptyList())
     val exercises: StateFlow<List<TemplateExercise>> = _exercises.asStateFlow()
 
-    // Состояние для ID блока
     private val _blockId = MutableStateFlow<Long?>(null)
 
     init {
         viewModelScope.launch {
-            // 1. Создаем блок для этой тренировки
             val blockId = dao.insertExerciseBlock(ExerciseBlock(workoutId = workoutId))
             _blockId.value = blockId
-
-            // 2. Начинаем слушать изменения упражнений в этом блоке
             dao.getExercisesForBlock(blockId).collectLatest { list ->
                 _exercises.value = list
             }
