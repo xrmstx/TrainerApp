@@ -14,10 +14,8 @@ class ClientViewModel(application: Application) : AndroidViewModel(application) 
     private val db = AppDatabase.getDatabase(application)
     private val dao = db.appDao()
 
-    // Поток данных (список клиентов)
     val clients = dao.getAllClients()
 
-    // Состояние для текстового поля (ввод имени)
     private val _newClientName = MutableStateFlow("")
     val newClientName: StateFlow<String> = _newClientName.asStateFlow()
 
@@ -30,7 +28,7 @@ class ClientViewModel(application: Application) : AndroidViewModel(application) 
         if (name.isNotEmpty()) {
             viewModelScope.launch {
                 dao.insertClient(Client(name = name))
-                _newClientName.value = "" // Очищаем поле после добавления
+                _newClientName.value = ""
             }
         }
     }
