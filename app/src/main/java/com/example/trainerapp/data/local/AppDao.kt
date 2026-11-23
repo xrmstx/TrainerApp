@@ -21,13 +21,19 @@ interface AppDao {
     @Insert
     suspend fun insertWorkout(workout: Workout): Long
 
+    // Получаем блок для тренировки (нужно для фикса бага)
+    @Query("SELECT * FROM exercise_blocks WHERE workoutId = :workoutId LIMIT 1")
+    suspend fun getBlockForWorkout(workoutId: Long): ExerciseBlock?
+
     @Query("SELECT * FROM template_exercises WHERE blockId = :blockId ORDER BY `order` ASC")
     fun getExercisesForBlock(blockId: Long): Flow<List<TemplateExercise>>
+    
     @Insert
     suspend fun insertExerciseBlock(block: ExerciseBlock): Long
     @Insert
     suspend fun insertTemplateExercise(exercise: TemplateExercise): Long
 
+    // --- Клиенты и Программы ---
     @Query("SELECT * FROM client_programs WHERE clientId = :clientId ORDER BY weekNumber ASC")
     fun getProgramsForClient(clientId: Long): Flow<List<ClientProgram>>
     @Insert
