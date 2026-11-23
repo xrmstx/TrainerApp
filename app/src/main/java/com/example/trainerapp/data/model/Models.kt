@@ -20,7 +20,7 @@ data class Macrocycle(
 @Entity(tableName = "workouts")
 data class Workout(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val mesocycleId: Long, // Ссылка на Macrocycle.id
+    val mesocycleId: Long,
     val dayNumber: Int,
     val name: String
 )
@@ -29,7 +29,7 @@ data class Workout(
 data class ExerciseBlock(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val workoutId: Long,
-    val blockType: String = "SINGLE"
+    val blockType: String = "SINGLE" // SINGLE, SUPERSET, CIRCUIT
 )
 
 @Entity(tableName = "template_exercises")
@@ -40,7 +40,8 @@ data class TemplateExercise(
     val order: Int,
     val targetSets: Int,
     val targetReps: String,
-    val targetWeight: Double?
+    val targetWeight: Double?,
+    val note: String? = null // Заметка к упражнению
 )
 
 @Entity(tableName = "client_programs")
@@ -69,15 +70,18 @@ data class ClientExercise(
     val exerciseName: String,
     val order: Int,
     val targetSets: Int,
-    val targetReps: String
+    val targetReps: String,
+    val note: String? = null
 )
 
+// Логи выполнения (Факт)
 @Entity(tableName = "exercise_logs")
 data class ExerciseLog(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val clientExerciseId: Long,
-    val actualSets: Int,
+    val setNumber: Int, // Номер подхода
     val actualReps: Int,
     val actualWeight: Double,
+    val note: String? = null, // Самочувствие
     val date: Long = System.currentTimeMillis()
 )
