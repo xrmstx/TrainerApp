@@ -21,12 +21,18 @@ interface AppDao {
     @Insert
     suspend fun insertWorkout(workout: Workout): Long
 
-    // Синхронный метод для поиска блока (для исправления бага)
-    @Query("SELECT * FROM exercise_blocks WHERE workoutId = :workoutId")
-    suspend fun getBlocksForWorkoutSync(workoutId: Long): List<ExerciseBlock>
+    // Синхронные методы для копирования
+    @Query("SELECT * FROM workouts WHERE mesocycleId = :macroId ORDER BY dayNumber ASC")
+    suspend fun getWorkoutsForMacroSync(macroId: Long): List<Workout>
+
+    @Query("SELECT * FROM exercise_blocks WHERE workoutId = :workoutId LIMIT 1")
+    suspend fun getBlockForWorkout(workoutId: Long): ExerciseBlock?
 
     @Query("SELECT * FROM template_exercises WHERE blockId = :blockId ORDER BY `order` ASC")
     fun getExercisesForBlock(blockId: Long): Flow<List<TemplateExercise>>
+
+    @Query("SELECT * FROM template_exercises WHERE blockId = :blockId ORDER BY `order` ASC")
+    suspend fun getExercisesForBlockSync(blockId: Long): List<TemplateExercise>
 
     @Insert
     suspend fun insertExerciseBlock(block: ExerciseBlock): Long
