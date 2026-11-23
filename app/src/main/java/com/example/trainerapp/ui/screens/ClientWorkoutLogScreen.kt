@@ -4,8 +4,10 @@ import android.app.Application
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -21,6 +23,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.trainerapp.data.local.AppDatabase
 import com.example.trainerapp.data.model.ExerciseLog
+import com.example.trainerapp.data.model.ClientExercise
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -43,16 +46,15 @@ class ClientWorkoutLogViewModel(application: Application, workoutId: Long) : And
             }
         }
     }
-
     fun closeHistory() { _historyDialog.value = null }
 
-    fun saveLog(exerciseId: Long, sets: String, reps: String, weight: String) {
-        val s = sets.toIntOrNull() ?: 0
+    fun saveLog(exerciseId: Long, setNum: String, reps: String, weight: String, note: String) {
+        val s = setNum.toIntOrNull() ?: 1
         val r = reps.toIntOrNull() ?: 0
         val w = weight.toDoubleOrNull() ?: 0.0
-        if (s > 0 && r > 0) {
+        if (r > 0) {
             viewModelScope.launch {
-                dao.insertExerciseLog(ExerciseLog(clientExerciseId = exerciseId, actualSets = s, actualReps = r, actualWeight = w))
+                dao.insertExerciseLog(ExerciseLog(clientExerciseId = exerciseId, setNumber = s, actualReps = r, actualWeight = w, note = note))
             }
         }
     }
@@ -86,7 +88,7 @@ fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: ()
                 if (historyDialog!!.second.isEmpty()) Text("Нет записей.")
                 else LazyColumn {
                     items(historyDialog!!.second) { log ->
-                        Text("Вес: ${log.actualWeight} кг, ${log.actualSets}x${log.actualReps}")
+                        Text("Подход ${log.setNumber}: ${log.actualWeight} кг x ${log.actualReps} (${log.note ?: ""})", modifier = Modifier.padding(vertical = 4.dp))
                     }
                 }
             },
@@ -105,17 +107,19 @@ fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: ()
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)) {
             if (exercises.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("В этой тренировке нет упражнений.")
+                    Text("В этой тренировке нет упражнений.", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f))
                 }
             } else {
                 LazyColumn {
                     items(exercises) { ex ->
-                        var sets by remember { mutableStateOf(ex.targetSets.toString()) }
+                        var setNum by remember { mutableStateOf("1") }
                         var reps by remember { mutableStateOf(ex.targetReps) }
                         var weight by remember { mutableStateOf("") }
+                        var note by remember { mutableStateOf("") }
 
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                            shape = RoundedCornerShape(16.dp),
                             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
@@ -125,21 +129,29 @@ fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: ()
                                         Text("История")
                                     }
                                 }
-                                Text("План: ${ex.targetSets} x ${ex.targetReps}", style = MaterialTheme.typography.bodySmall)
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Row {
-                                    OutlinedTextField(value = sets, onValueChange = { sets = it }, label = { Text("Подходы") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    OutlinedTextField(value = reps, onValueChange = { reps = it }, label = { Text("Повторы") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    OutlinedTextField(value = weight, onValueChange = { weight = it }, label = { Text("Вес") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                                Text("План: ${ex.targetSets} x ${ex.targetReps}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                                Text("Заметка: ${ex.note ?: "-"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedTextField(value = setNum, onValueChange = { setNum = it }, label = { Text("Подх.") }, modifier = Modifier.weight(0.5f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), shape = RoundedCornerShape(12.dp))
+                                    OutlinedTextField(value = weight, onValueChange = { weight = it }, label = { Text("Вес") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), shape = RoundedCornerShape(12.dp))
+                                    OutlinedTextField(value = reps, onValueChange = { reps = it }, label = { Text("Повт.") }, modifier = Modifier.weight(0.8f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), shape = RoundedCornerShape(12.dp))
                                 }
                                 Spacer(modifier = Modifier.height(8.dp))
+                                OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("Комментарий (самочувствие)") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
+                                Spacer(modifier = Modifier.height(8.dp))
                                 Button(
-                                    onClick = { viewModel.saveLog(ex.id, sets, reps, weight); weight = "" },
-                                    modifier = Modifier.align(Alignment.End)
+                                    onClick = { 
+                                        viewModel.saveLog(ex.id, setNum, reps, weight, note)
+                                        // Автоинкремент подхода и очистка
+                                        setNum = (setNum.toIntOrNull()?.plus(1) ?: 2).toString()
+                                        weight = ""
+                                        note = ""
+                                    },
+                                    modifier = Modifier.align(Alignment.End),
+                                    shape = RoundedCornerShape(12.dp)
                                 ) {
-                                    Text("Сохранить")
+                                    Text("Записать подход")
                                 }
                             }
                         }
