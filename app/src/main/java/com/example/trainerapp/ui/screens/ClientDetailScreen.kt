@@ -2,7 +2,6 @@ package com.example.trainerapp.ui.screens
 
 import android.app.Application
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -14,8 +13,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -26,15 +23,18 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.trainerapp.data.local.AppDatabase
 import com.example.trainerapp.data.model.*
-import com.example.trainerapp.ui.theme.AccentOrange
-import com.example.trainerapp.ui.theme.AccentPink
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class ClientDetailViewModel(application: Application, val clientId: Long) : AndroidViewModel(application) {
+class ClientDetailViewModel(
+    application: Application,
+    val clientId: Long
+) : AndroidViewModel(application) {
+
     private val dao = AppDatabase.getDatabase(application).appDao()
+
     val programs = dao.getProgramsForClient(clientId)
     val templates = dao.getAllMacrocycles()
 
@@ -49,66 +49,125 @@ class ClientDetailViewModel(application: Application, val clientId: Long) : Andr
 
     init {
         viewModelScope.launch {
-            dao.getAllClients().collect { list -> _client.value = list.find { it.id == clientId } }
+            dao.getAllClients().collect { list ->
+                _client.value = list.find { it.id == clientId }
+            }
         }
     }
 
-    fun toggleDialog() { _showDialog.value = !_showDialog.value }
-    fun toggleEditDialog() { _showEditDialog.value = !_showEditDialog.value }
+    fun toggleDialog() {
+        _showDialog.value = !_showDialog.value
+    }
+
+    fun toggleEditDialog() {
+        _showEditDialog.value = !_showEditDialog.value
+    }
 
     fun updateClient(goal: String, notes: String) {
         viewModelScope.launch {
             val current = _client.value ?: return@launch
-            dao.insertClient(current.copy(goal = goal.ifEmpty { null }, notes = notes.ifEmpty { null }))
+            dao.insertClient(
+                current.copy(
+                    goal = goal.ifEmpty { null },
+                    notes = notes.ifEmpty { null }
+                )
+            )
             toggleEditDialog()
         }
     }
 
-    fun deleteClient() { viewModelScope.launch { dao.deleteClient(clientId) } }
-    fun deleteProgram(programId: Long) { viewModelScope.launch { dao.deleteClientProgram(programId) } }
+    fun deleteClient() {
+        viewModelScope.launch {
+            dao.deleteClient(clientId)
+        }
+    }
+
+    fun deleteProgram(programId: Long) {
+        viewModelScope.launch {
+            dao.deleteClientProgram(programId)
+        }
+    }
 
     fun assignProgram(macrocycle: Macrocycle) {
         viewModelScope.launch {
             val programId = dao.insertClientProgram(
-                ClientProgram(clientId = clientId, macrocycleId = macrocycle.id, weekNumber = 1, totalWeeks = macrocycle.durationWeeks)
-            )
-            val originalWorkouts = dao.getWorkoutsForMacroSync(macrocycle.id)
-            originalWorkouts.forEach { origWorkout ->
-                val newWorkoutId = dao.insertClientWorkout(
-                    ClientWorkout(clientProgramId = programId, originalWorkoutId = origWorkout.id, dayNumber = origWorkout.dayNumber, name = origWorkout.name)
+                ClientProgram(
+                    clientId = clientId,
+                    macrocycleId = macrocycle.id,
+                    weekNumber = 1,
+                    totalWeeks = macrocycle.durationWeeks
                 )
-                val blocks = dao.getBlocksForWorkoutSync(origWorkout.id)
+            )
+
+            val originalWorkouts = dao.getWorkoutsForMacroSync(macrocycle.id)
+
+            originalWorkouts.forEach { originalWorkout ->
+                val newWorkoutId = dao.insertClientWorkout(
+                    ClientWorkout(
+                        clientProgramId = programId,
+                        originalWorkoutId = originalWorkout.id,
+                        dayNumber = originalWorkout.dayNumber,
+                        name = originalWorkout.name
+                    )
+                )
+
+                val blocks = dao.getBlocksForWorkoutSync(originalWorkout.id)
+
                 blocks.forEach { block ->
                     val exercises = dao.getExercisesForBlockSync(block.id)
-                    exercises.forEach { ex ->
+
+                    exercises.forEach { exercise ->
                         dao.insertClientExercise(
                             ClientExercise(
-                                clientWorkoutId = newWorkoutId, exerciseName = ex.exerciseName, order = ex.order,
-                                section = block.section, blockType = block.blockType,
-                                targetSets = ex.targetSets, targetReps = ex.targetReps, note = ex.note, metricType = ex.metricType
+                                clientWorkoutId = newWorkoutId,
+                                exerciseName = exercise.exerciseName,
+                                order = exercise.order,
+                                section = block.section,
+                                blockType = block.blockType,
+                                targetSets = exercise.targetSets,
+                                targetReps = exercise.targetReps,
+                                note = exercise.note,
+                                metricType = exercise.metricType
                             )
                         )
                     }
                 }
             }
+
             toggleDialog()
         }
     }
 }
 
-class ClientDetailViewModelFactory(private val application: Application, private val clientId: Long) : ViewModelProvider.Factory {
+class ClientDetailViewModelFactory(
+    private val application: Application,
+    private val clientId: Long
+) : ViewModelProvider.Factory {
+
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(ClientDetailViewModel::class.java)) { @Suppress("UNCHECKED_CAST") return ClientDetailViewModel(application, clientId) as T }
+        if (modelClass.isAssignableFrom(ClientDetailViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST")
+            return ClientDetailViewModel(application, clientId) as T
+        }
+
         throw IllegalArgumentException("Unknown ViewModel class")
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-fun ClientDetailScreen(clientId: Long, onBackClick: () -> Unit, onProgramClick: (Long) -> Unit, onHistoryClick: () -> Unit) {
+fun ClientDetailScreen(
+    clientId: Long,
+    onBackClick: () -> Unit,
+    onProgramClick: (Long) -> Unit,
+    onHistoryClick: () -> Unit
+) {
     val context = LocalContext.current
     val application = context.applicationContext as Application
-    val viewModel: ClientDetailViewModel = viewModel(factory = ClientDetailViewModelFactory(application, clientId))
+
+    val viewModel: ClientDetailViewModel = viewModel(
+        factory = ClientDetailViewModelFactory(application, clientId)
+    )
 
     val client by viewModel.client.collectAsState()
     val programs by viewModel.programs.collectAsState(initial = emptyList())
@@ -119,18 +178,41 @@ fun ClientDetailScreen(clientId: Long, onBackClick: () -> Unit, onProgramClick: 
     if (showEditDialog) {
         var goal by remember { mutableStateOf(client?.goal ?: "") }
         var notes by remember { mutableStateOf(client?.notes ?: "") }
+
         AlertDialog(
             onDismissRequest = { viewModel.toggleEditDialog() },
             title = { Text("Редактировать профиль") },
             text = {
                 Column {
-                    OutlinedTextField(value = goal, onValueChange = { goal = it }, label = { Text("Цель") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
+                    OutlinedTextField(
+                        value = goal,
+                        onValueChange = { goal = it },
+                        label = { Text("Цель") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+
                     Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(value = notes, onValueChange = { notes = it }, label = { Text("Заметки") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
+
+                    OutlinedTextField(
+                        value = notes,
+                        onValueChange = { notes = it },
+                        label = { Text("Заметки") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
                 }
             },
-            confirmButton = { TextButton(onClick = { viewModel.updateClient(goal, notes) }) { Text("Сохранить") } },
-            dismissButton = { TextButton(onClick = { viewModel.toggleEditDialog() }) { Text("Отмена") } }
+            confirmButton = {
+                TextButton(onClick = { viewModel.updateClient(goal, notes) }) {
+                    Text("Сохранить")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.toggleEditDialog() }) {
+                    Text("Отмена")
+                }
+            }
         )
     }
 
@@ -139,72 +221,186 @@ fun ClientDetailScreen(clientId: Long, onBackClick: () -> Unit, onProgramClick: 
             onDismissRequest = { viewModel.toggleDialog() },
             title = { Text("Выберите шаблон") },
             text = {
-                if (templates.isEmpty()) Text("У вас нет созданных шаблонов.")
-                else LazyColumn {
-                    items(templates) { macro ->
-                        Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).combinedClickable(onClick = { viewModel.assignProgram(macro) }), shape = RoundedCornerShape(12.dp)) {
-                            Text(macro.name, modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.titleMedium)
+                if (templates.isEmpty()) {
+                    Text("У вас нет созданных шаблонов.")
+                } else {
+                    LazyColumn {
+                        items(templates) { macro ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                                    .combinedClickable(
+                                        onClick = { viewModel.assignProgram(macro) }
+                                    ),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text(
+                                    text = macro.name,
+                                    modifier = Modifier.padding(16.dp),
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                            }
                         }
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { viewModel.toggleDialog() }) { Text("Отмена") } }
+            confirmButton = {
+                TextButton(onClick = { viewModel.toggleDialog() }) {
+                    Text("Отмена")
+                }
+            }
         )
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(client?.name ?: "Профиль", fontWeight = FontWeight.Bold) },
-                navigationIcon = { IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, contentDescription = "Назад") } },
+                title = {
+                    Text(
+                        text = client?.name ?: "Профиль",
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
+                    }
+                },
                 actions = {
-                    IconButton(onClick = { viewModel.toggleEditDialog() }) { Icon(Icons.Default.Edit, contentDescription = "Редактировать") }
-                    IconButton(onClick = { viewModel.deleteClient() }) { Icon(Icons.Default.Delete, contentDescription = "Удалить клиента") }
+                    IconButton(onClick = { viewModel.toggleEditDialog() }) {
+                        Icon(Icons.Default.Edit, contentDescription = "Редактировать")
+                    }
+
+                    IconButton(onClick = { viewModel.deleteClient() }) {
+                        Icon(Icons.Default.Delete, contentDescription = "Удалить клиента")
+                    }
                 }
             )
         }
     ) { paddingValues ->
-        Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)) {
-            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), elevation = CardDefaults.cardElevation(3.dp)) {
-                Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Цель: ${client?.goal ?: "Не задана"}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(16.dp)
+        ) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                elevation = CardDefaults.cardElevation(3.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Цель: ${client?.goal ?: "Не задана"}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text("Заметки: ${client?.notes ?: "Нет заметок"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+
+                    Text(
+                        text = "Заметки: ${client?.notes ?: "Нет заметок"}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
                 }
             }
+
             Spacer(modifier = Modifier.height(16.dp))
-            Button(onClick = { viewModel.toggleDialog() }, modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(12.dp)) {
+
+            Button(
+                onClick = { viewModel.toggleDialog() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
                 Icon(Icons.Default.Add, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Назначить программу")
             }
+
             Spacer(modifier = Modifier.height(8.dp))
-            OutlinedButton(onClick = onHistoryClick, modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(12.dp)) {
+
+            OutlinedButton(
+                onClick = onHistoryClick,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
                 Icon(Icons.Default.List, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("История тренировок")
             }
+
             Spacer(modifier = Modifier.height(24.dp))
-            Text("Активные программы:", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+
+            Text(
+                text = "Активные программы:",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+
             Spacer(modifier = Modifier.height(8.dp))
+
             if (programs.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Нет назначенных программ", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)) }
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Нет назначенных программ",
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                    )
+                }
             } else {
                 LazyColumn {
-                    items(programs) { prog ->
+                    items(programs) { program ->
                         Card(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp).combinedClickable(onClick = { onProgramClick(prog.id) }, onLongClick = { viewModel.deleteProgram(prog.id) }),
-                            shape = RoundedCornerShape(18.dp), elevation = CardDefaults.cardElevation(3.dp)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 6.dp)
+                                .combinedClickable(
+                                    onClick = { onProgramClick(program.id) },
+                                    onLongClick = {
+                                        viewModel.deleteProgram(program.id)
+                                    }
+                                ),
+                            shape = RoundedCornerShape(18.dp),
+                            elevation = CardDefaults.cardElevation(3.dp)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
-                                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                                    Text("Программа", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                    Text("Неделя ${prog.weekNumber} из ${prog.totalWeeks}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                                Row(
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = "Программа",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+
+                                    Text(
+                                        text = "Неделя ${program.weekNumber} из ${program.totalWeeks}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
                                 }
+
                                 Spacer(modifier = Modifier.height(8.dp))
-                                // ИСПРАВЛЕНИЕ: Используем лямбду для прогресса
+
                                 LinearProgressIndicator(
-                                    progress = { prog.weekNumber.toFloat() / prog.totalWeeks },
+                                    progress = if (program.totalWeeks > 0) {
+                                        (program.weekNumber.toFloat() / program.totalWeeks)
+                                            .coerceIn(0f, 1f)
+                                    } else {
+                                        0f
+                                    },
                                     modifier = Modifier.fillMaxWidth(),
                                     color = MaterialTheme.colorScheme.primary
                                 )
