@@ -69,4 +69,71 @@ class MacroDetailViewModelFactory(private val application: Application, private 
 fun MacroDetailScreen(macroId: Long, macroName: String, onBackClick: () -> Unit, onWorkoutClick: (Long, String) -> Unit) {
     val context = LocalContext.current
     val application = context.applicationContext as Application
-    val viewModel: MacroDetailViewModel = viewModel(factory = MacroDetailViewModelFactory(
+    val viewModel: MacroDetailViewModel = viewModel(factory = MacroDetailViewModelFactory(application, macroId))
+    val workouts by viewModel.workouts.collectAsState(initial = emptyList())
+    val showDialog by viewModel.showDialog.collectAsState()
+    val workoutName by viewModel.workoutName.collectAsState()
+
+    // Функция шаринга всей программы (собираем все дни)
+    fun shareProgram() {
+        val text = buildString {
+            appendLine("🏋️ Программа: $macroName")
+            appendLine("")
+            workouts.forEach { workout ->
+                appendLine("📅 День ${workout.dayNumber}: ${workout.name}")
+                appendLine("")
+            }
+            appendLine("💪 Успехов в тренировках!")
+        }
+        val sendIntent = Intent().apply {
+            action = Intent.ACTION_SEND
+            putExtra(Intent.EXTRA_TEXT, text)
+            type = "text/plain"
+        }
+        context.startActivity(Intent.createChooser(sendIntent, "Поделиться программой"))
+    }
+
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { viewModel.toggleDialog() },
+            title = { Text("Новая тренировка") },
+            text = { OutlinedTextField(value = workoutName, onValueChange = { viewModel.onNameChange(it) }, label = { Text("Название") }, shape = RoundedCornerShape(12.dp)) },
+            confirmButton = { TextButton(onClick = { viewModel.addWorkout(workouts.size) }) { Text("Добавить") } },
+            dismissButton = { TextButton(onClick = { viewModel.toggleDialog() }) { Text("Отмена") } }
+        )
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(macroName, fontWeight = FontWeight.Bold) },
+                navigationIcon = { IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, contentDescription = "Назад") } },
+                actions = { IconButton(onClick = { shareProgram() }) { Icon(Icons.Default.Share, contentDescription = "Поделиться") } }
+            )
+        },
+        floatingActionButton = { FloatingActionButton(onClick = { viewModel.toggleDialog() }) { Icon(Icons.Default.Add, contentDescription = null) } }
+    ) { paddingValues ->
+        Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)) {
+            if (workouts.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Список тренировок пуст.", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)) }
+            } else {
+                LazyColumn {
+                    items(workouts) { workout ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp).combinedClickable(
+                                onClick = { onWorkoutClick(workout.id, workout.name) },
+                                onLongClick = { viewModel.deleteWorkout(workout.id) }
+                            ),
+                            shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(2.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text("День ${workout.dayNumber}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                Text(workout.name, style = MaterialTheme.typography.titleMedium)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
