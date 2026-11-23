@@ -38,27 +38,20 @@ class ClientWorkoutLogViewModel(application: Application, workoutId: Long) : And
     fun showHistory(exerciseName: String, exerciseId: Long) {
         viewModelScope.launch {
             val logs = mutableListOf<ExerciseLog>()
-            dao.getLogsForExercise(exerciseId).collect { 
-                logs.clear()
-                logs.addAll(it)
-                _historyDialog.value = Pair(exerciseName, logs.toList())
-            }
+            dao.getLogsForExercise(exerciseId).collect { logs.clear(); logs.addAll(it); _historyDialog.value = Pair(exerciseName, logs.toList()) }
         }
     }
     fun closeHistory() { _historyDialog.value = null }
 
-    // Авто-подстановка прошлого веса при открытии экрана
-    suspend fun getLastWeight(exerciseId: Long): Double? {
-        return dao.getLastLogForExercise(exerciseId)?.actualWeight
-    }
+    suspend fun getLastWeight(exerciseId: Long): Double? = dao.getLastLogForExercise(exerciseId)?.actualWeight
 
-    fun saveLog(exerciseId: Long, setNum: String, reps: String, weight: String, note: String) {
+    fun saveLog(exerciseId: Long, setNum: String, reps: String, weight: String, note: String, isCircuit: Boolean) {
         val s = setNum.toIntOrNull() ?: 1
         val r = reps.toIntOrNull() ?: 0
         val w = weight.toDoubleOrNull() ?: 0.0
-        if (r > 0) {
+        if (r > 0 || isCircuit) {
             viewModelScope.launch {
-                dao.insertExerciseLog(ExerciseLog(clientExerciseId = exerciseId, setNumber = s, actualReps = r, actualWeight = w, note = note))
+                dao.insertExerciseLog(ExerciseLog(clientExerciseId = exerciseId, setNumber = s, actualReps = r, actualWeight = w, resultText = if (isCircuit) reps else null, note = note))
             }
         }
     }
@@ -66,10 +59,7 @@ class ClientWorkoutLogViewModel(application: Application, workoutId: Long) : And
 
 class ClientWorkoutLogViewModelFactory(private val application: Application, private val workoutId: Long) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(ClientWorkoutLogViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
-            return ClientWorkoutLogViewModel(application, workoutId) as T
-        }
+        if (modelClass.isAssignableFrom(ClientWorkoutLogViewModel::class.java)) { @Suppress("UNCHECKED_CAST") return ClientWorkoutLogViewModel(application, workoutId) as T }
         throw IllegalArgumentException("Unknown ViewModel class")
     }
 }
@@ -80,7 +70,6 @@ fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: ()
     val context = LocalContext.current
     val application = context.applicationContext as Application
     val viewModel: ClientWorkoutLogViewModel = viewModel(factory = ClientWorkoutLogViewModelFactory(application, workoutId))
-
     val exercises by viewModel.exercises.collectAsState(initial = emptyList())
     val historyDialog by viewModel.historyDialog.collectAsState()
 
@@ -90,89 +79,61 @@ fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: ()
             title = { Text("История: ${historyDialog!!.first}") },
             text = {
                 if (historyDialog!!.second.isEmpty()) Text("Нет записей.")
-                else LazyColumn {
-                    items(historyDialog!!.second) { log ->
-                        Text("Подход ${log.setNumber}: ${log.actualWeight} кг x ${log.actualReps} (${log.note ?: ""})", modifier = Modifier.padding(vertical = 4.dp))
-                    }
-                }
+                else LazyColumn { items(historyDialog!!.second) { log -> Text("Подход ${log.setNumber}: ${log.actualWeight} кг x ${log.actualReps} (${log.note ?: ""})", modifier = Modifier.padding(vertical = 4.dp)) } }
             },
             confirmButton = { TextButton(onClick = { viewModel.closeHistory() }) { Text("Закрыть") } }
         )
     }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(workoutName) },
-                navigationIcon = { IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, contentDescription = "Назад") } }
-            )
-        }
+        topBar = { TopAppBar(title = { Text(workoutName) }, navigationIcon = { IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, contentDescription = "Назад") } }) }
     ) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)) {
             if (exercises.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("В этой тренировке нет упражнений.", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f))
-                }
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Нет упражнений.") }
             } else {
-                // Группируем по секциям
                 val grouped = exercises.groupBy { it.section }
-                
                 LazyColumn {
-                    grouped.forEach { (section, exerciseList) ->
-                        item {
-                            Text(
-                                text = when(section) { "WARMUP" -> "🔥 Разминка"; "COOLDOWN" -> "❄️ Заминка"; else -> "💪 Основная часть" },
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.padding(vertical = 8.dp)
-                            )
-                        }
-                        items(exerciseList) { ex ->
+                    grouped.forEach { (section, list) ->
+                        item { Text(when(section) { "WARMUP" -> "🔥 Разминка"; "COOLDOWN" -> "❄️ Заминка"; else -> "💪 Основа" }, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(vertical = 8.dp)) }
+                        items(list) { ex ->
                             var setNum by remember { mutableStateOf("1") }
                             var reps by remember { mutableStateOf(ex.targetReps) }
                             var weight by remember { mutableStateOf("") }
                             var note by remember { mutableStateOf("") }
-                            
-                            // Авто-подстановка
+                            val isCircuit = ex.blockType == "CIRCUIT"
+
                             LaunchedEffect(ex.id) {
-                                val lastWeight = viewModel.getLastWeight(ex.id)
-                                if (lastWeight != null) weight = lastWeight.toString()
+                                if (!isCircuit) {
+                                    val lastWeight = viewModel.getLastWeight(ex.id)
+                                    if (lastWeight != null) weight = lastWeight.toString()
+                                }
                             }
 
-                            Card(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                                shape = RoundedCornerShape(16.dp),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                            ) {
+                            Card(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(2.dp)) {
                                 Column(modifier = Modifier.padding(16.dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(ex.exerciseName, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                                        TextButton(onClick = { viewModel.showHistory(ex.exerciseName, ex.id) }) {
-                                            Text("История")
-                                        }
+                                        TextButton(onClick = { viewModel.showHistory(ex.exerciseName, ex.id) }) { Text("История") }
                                     }
-                                    Text("План: ${ex.targetSets} x ${ex.targetReps}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                                    if (ex.note != null) Text("📝 ${ex.note}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                                    Text("План: ${if (isCircuit) "Меткон" else "${ex.targetSets} x ${ex.targetReps}"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                                     Spacer(modifier = Modifier.height(12.dp))
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        OutlinedTextField(value = setNum, onValueChange = { setNum = it }, label = { Text("Подх.") }, modifier = Modifier.weight(0.5f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), shape = RoundedCornerShape(12.dp))
-                                        OutlinedTextField(value = weight, onValueChange = { weight = it }, label = { Text("Вес") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), shape = RoundedCornerShape(12.dp))
-                                        OutlinedTextField(value = reps, onValueChange = { reps = it }, label = { Text("Повт.") }, modifier = Modifier.weight(0.8f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), shape = RoundedCornerShape(12.dp))
+                                    
+                                    if (isCircuit) {
+                                        // Интерфейс для меткона
+                                        OutlinedTextField(value = reps, onValueChange = { reps = it }, label = { Text("Результат (раунды/время/вес)") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
+                                    } else {
+                                        // Интерфейс для обычной тренировки
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            OutlinedTextField(value = setNum, onValueChange = { setNum = it }, label = { Text("Подх.") }, modifier = Modifier.weight(0.5f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), shape = RoundedCornerShape(12.dp))
+                                            OutlinedTextField(value = weight, onValueChange = { weight = it }, label = { Text("Вес") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), shape = RoundedCornerShape(12.dp))
+                                            OutlinedTextField(value = reps, onValueChange = { reps = it }, label = { Text("Повт.") }, modifier = Modifier.weight(0.8f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), shape = RoundedCornerShape(12.dp))
+                                        }
                                     }
                                     Spacer(modifier = Modifier.height(8.dp))
                                     OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("Комментарий") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
                                     Spacer(modifier = Modifier.height(8.dp))
-                                    Button(
-                                        onClick = { 
-                                            viewModel.saveLog(ex.id, setNum, reps, weight, note)
-                                            setNum = (setNum.toIntOrNull()?.plus(1) ?: 2).toString()
-                                            weight = ""
-                                            note = ""
-                                        },
-                                        modifier = Modifier.align(Alignment.End),
-                                        shape = RoundedCornerShape(12.dp)
-                                    ) {
-                                        Text("Записать подход")
-                                    }
+                                    Button(onClick = { viewModel.saveLog(ex.id, setNum, reps, weight, note, isCircuit); setNum = (setNum.toIntOrNull()?.plus(1) ?: 2).toString(); weight = ""; note = "" }, modifier = Modifier.align(Alignment.End), shape = RoundedCornerShape(12.dp)) { Text("Записать") }
                                 }
                             }
                         }
