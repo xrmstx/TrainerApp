@@ -4,8 +4,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -24,20 +26,23 @@ fun ClientScreen(
     val newClientName by viewModel.newClientName.collectAsState()
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Мои клиенты") }) }
+        topBar = { TopAppBar(title = { Text("Мои клиенты", style = MaterialTheme.typography.titleLarge) }) }
     ) { paddingValues ->
-        Column(
-            modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)
-        ) {
+        Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
                     value = newClientName,
                     onValueChange = { viewModel.onNameChange(it) },
                     label = { Text("Имя нового клиента") },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                Button(onClick = { viewModel.addClient() }) {
+                Spacer(modifier = Modifier.width(12.dp))
+                Button(
+                    onClick = { viewModel.addClient() },
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.height(56.dp)
+                ) {
                     Icon(Icons.Default.Add, contentDescription = "Добавить")
                 }
             }
@@ -46,21 +51,23 @@ fun ClientScreen(
 
             if (clients.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Список пуст. Добавьте первого клиента!", style = MaterialTheme.typography.bodyLarge)
+                    Text("Список пуст. Добавьте первого клиента!", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f))
                 }
             } else {
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                LazyColumn {
                     items(clients) { client ->
                         Card(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
                                 .clickable { onClientClick(client.id, client.name) },
-                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                            shape = RoundedCornerShape(16.dp),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                         ) {
-                            Text(
-                                text = client.name,
-                                modifier = Modifier.padding(16.dp),
-                                style = MaterialTheme.typography.titleMedium
-                            )
+                            Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Text(text = client.name, style = MaterialTheme.typography.titleMedium)
+                            }
                         }
                     }
                 }
