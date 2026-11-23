@@ -6,13 +6,11 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface AppDao {
-    // --- Клиенты ---
     @Query("SELECT * FROM clients ORDER BY name ASC")
     fun getAllClients(): Flow<List<Client>>
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertClient(client: Client): Long
 
-    // --- Шаблоны ---
     @Query("SELECT * FROM macrocycles")
     fun getAllMacrocycles(): Flow<List<Macrocycle>>
     @Insert
@@ -30,7 +28,6 @@ interface AppDao {
     @Insert
     suspend fun insertTemplateExercise(exercise: TemplateExercise): Long
 
-    // --- Программы клиентов (Копирование) ---
     @Query("SELECT * FROM client_programs WHERE clientId = :clientId ORDER BY weekNumber ASC")
     fun getProgramsForClient(clientId: Long): Flow<List<ClientProgram>>
     @Insert
@@ -46,13 +43,8 @@ interface AppDao {
     @Insert
     suspend fun insertClientExercise(exercise: ClientExercise): Long
 
-    // --- Логи и История ---
     @Query("SELECT * FROM exercise_logs WHERE clientExerciseId = :clientExerciseId ORDER BY date DESC")
     fun getLogsForExercise(clientExerciseId: Long): Flow<List<ExerciseLog>>
     @Insert
     suspend fun insertExerciseLog(log: ExerciseLog): Long
-
-    // Получить последний лог для авто-подстановки
-    @Query("SELECT * FROM exercise_logs WHERE clientExerciseId = :clientExerciseId ORDER BY date DESC LIMIT 1")
-    suspend fun getLastLogForExercise(clientExerciseId: Long): ExerciseLog?
 }
