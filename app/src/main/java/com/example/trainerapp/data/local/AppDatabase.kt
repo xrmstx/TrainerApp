@@ -8,11 +8,17 @@ import com.example.trainerapp.data.model.*
 
 @Database(
     entities = [
-        Client::class, Macrocycle::class, Mesocycle::class,
-        Workout::class, ExerciseBlock::class, TemplateExercise::class,
-        ClientProgram::class, ExerciseLog::class
+        Client::class, 
+        Macrocycle::class, 
+        Workout::class, 
+        ExerciseBlock::class, 
+        TemplateExercise::class,
+        ClientProgram::class, 
+        ClientWorkout::class, 
+        ClientExercise::class, 
+        ExerciseLog::class
     ],
-    version = 2,
+    version = 3, // Подняли версию до 3
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -29,7 +35,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "fitness_database"
                 )
-                .fallbackToDestructiveMigration()
+                .fallbackToDestructiveMigration() // Автоматический сброс при изменении версии
                 .build()
                 INSTANCE = instance
                 instance
