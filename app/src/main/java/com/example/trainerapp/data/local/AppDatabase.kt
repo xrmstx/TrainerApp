@@ -12,7 +12,7 @@ import com.example.trainerapp.data.model.*
         TemplateExercise::class, ClientProgram::class, ClientWorkout::class, 
         ClientExercise::class, ExerciseLog::class
     ],
-    version = 7, // <-- ВЕРСИЯ 7
+    version = 8, // <-- Версия 8
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
