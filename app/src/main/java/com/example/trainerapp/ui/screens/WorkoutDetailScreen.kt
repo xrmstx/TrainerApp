@@ -145,4 +145,56 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(value = exNote, onValueChange = { viewModel.onNoteChange(it) }, label = { Text("Заметка") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
-                   
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Метрика:", style = MaterialTheme.typography.bodySmall)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(selected = exMetric == "REPS", onClick = { viewModel.onMetricChange("REPS") }, label = { Text("Повторы") })
+                        FilterChip(selected = exMetric == "TIME", onClick = { viewModel.onMetricChange("TIME") }, label = { Text("Время") })
+                        FilterChip(selected = exMetric == "DISTANCE", onClick = { viewModel.onMetricChange("DISTANCE") }, label = { Text("Дистанция") })
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { viewModel.addOrEditExercise() }) { Text("Сохранить") } },
+            dismissButton = { TextButton(onClick = { viewModel.openDialog(null) }) { Text("Отмена") } }
+        )
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(workoutName) },
+                navigationIcon = { IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, contentDescription = "Назад") } }
+            )
+        },
+        floatingActionButton = { FloatingActionButton(onClick = { viewModel.openDialog(null) }) { Icon(Icons.Default.Add, contentDescription = null) } }
+    ) { paddingValues ->
+        Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+            TabRow(selectedTabIndex = when(selectedSection) { "WARMUP" -> 0; "MAIN" -> 1; else -> 2 }) {
+                Tab(selected = selectedSection == "WARMUP", onClick = { viewModel.onSectionChange("WARMUP") }, text = { Text("Разминка") })
+                Tab(selected = selectedSection == "MAIN", onClick = { viewModel.onSectionChange("MAIN") }, text = { Text("Основа") })
+                Tab(selected = selectedSection == "COOLDOWN", onClick = { viewModel.onSectionChange("COOLDOWN") }, text = { Text("Заминка") })
+            }
+            if (exercises.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Нет упражнений.", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)) }
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                    items(exercises) { ex ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp).combinedClickable(
+                                onClick = { viewModel.openDialog(ex) },
+                                onLongClick = { viewModel.deleteExercise(ex) }
+                            ),
+                            shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(2.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(ex.exerciseName, style = MaterialTheme.typography.titleMedium)
+                                Text("План: ${ex.targetSets} x ${ex.targetReps} (${ex.metricType})", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                                if (ex.note != null) Text("📝 ${ex.note}", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
