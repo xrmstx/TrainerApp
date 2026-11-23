@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp // <-- ДОБАВЛЕН ИМПОРТ
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -44,7 +45,7 @@ class MainActivity : ComponentActivity() {
                                 clientId = id,
                                 onBackClick = { navController.popBackStack() },
                                 onProgramClick = { programId -> navController.navigate("client_program_detail/$programId") },
-                                onHistoryClick = { navController.navigate("client_history/$id") } // Заглушка для истории
+                                onHistoryClick = { navController.navigate("client_history/$id") }
                             )
                         }
                         composable("client_program_detail/{programId}") { backStackEntry ->
@@ -57,7 +58,6 @@ class MainActivity : ComponentActivity() {
                             ClientWorkoutLogScreen(workoutId = workoutId, workoutName = workoutName, onBackClick = { navController.popBackStack() })
                         }
                         composable("client_history/{clientId}") { 
-                            // Заглушка для экрана истории
                             Text("История тренировок (в разработке)", modifier = Modifier.padding(16.dp))
                         }
                         composable("templates") { TemplateScreen(onMacroClick = { id, name -> navController.navigate("macro_detail/$id/$name") }) }
