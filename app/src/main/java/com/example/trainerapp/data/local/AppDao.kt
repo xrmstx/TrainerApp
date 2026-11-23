@@ -10,26 +10,26 @@ interface AppDao {
     fun getAllClients(): Flow<List<Client>>
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertClient(client: Client): Long
+    @Query("DELETE FROM clients WHERE id = :clientId")
+    suspend fun deleteClient(clientId: Long)
 
     @Query("SELECT * FROM macrocycles")
     fun getAllMacrocycles(): Flow<List<Macrocycle>>
     @Insert
     suspend fun insertMacrocycle(macrocycle: Macrocycle): Long
+    @Query("DELETE FROM macrocycles WHERE id = :macroId")
+    suspend fun deleteMacrocycle(macroId: Long)
 
     @Query("SELECT * FROM workouts WHERE mesocycleId = :macroId ORDER BY dayNumber ASC")
     fun getWorkoutsForMacro(macroId: Long): Flow<List<Workout>>
     @Insert
     suspend fun insertWorkout(workout: Workout): Long
 
-    // --- СИНХРОННЫЕ МЕТОДЫ (нужны для копирования) ---
     @Query("SELECT * FROM workouts WHERE mesocycleId = :macroId ORDER BY dayNumber ASC")
     suspend fun getWorkoutsForMacroSync(macroId: Long): List<Workout>
 
     @Query("SELECT * FROM exercise_blocks WHERE workoutId = :workoutId")
     suspend fun getBlocksForWorkoutSync(workoutId: Long): List<ExerciseBlock>
-
-    @Query("SELECT * FROM exercise_blocks WHERE workoutId = :workoutId LIMIT 1")
-    suspend fun getBlockForWorkout(workoutId: Long): ExerciseBlock?
 
     @Query("SELECT * FROM template_exercises WHERE blockId = :blockId ORDER BY `order` ASC")
     fun getExercisesForBlock(blockId: Long): Flow<List<TemplateExercise>>
@@ -41,8 +41,9 @@ interface AppDao {
     suspend fun insertExerciseBlock(block: ExerciseBlock): Long
     @Insert
     suspend fun insertTemplateExercise(exercise: TemplateExercise): Long
+    @Query("DELETE FROM template_exercises WHERE id = :exerciseId")
+    suspend fun deleteTemplateExercise(exerciseId: Long)
 
-    // --- Клиенты и Программы ---
     @Query("SELECT * FROM client_programs WHERE clientId = :clientId ORDER BY weekNumber ASC")
     fun getProgramsForClient(clientId: Long): Flow<List<ClientProgram>>
     @Insert
@@ -60,7 +61,6 @@ interface AppDao {
     @Insert
     suspend fun insertClientExercise(exercise: ClientExercise): Long
 
-    // --- Логи ---
     @Query("SELECT * FROM exercise_logs WHERE clientExerciseId = :clientExerciseId ORDER BY date DESC LIMIT 1")
     suspend fun getLastLogForExercise(clientExerciseId: Long): ExerciseLog?
 
