@@ -11,17 +11,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class ClientViewModel(application: Application) : AndroidViewModel(application) {
-    private val db = AppDatabase.getDatabase(application)
-    private val dao = db.appDao()
-
+    private val dao = AppDatabase.getDatabase(application).appDao()
     val clients = dao.getAllClients()
 
     private val _newClientName = MutableStateFlow("")
     val newClientName: StateFlow<String> = _newClientName.asStateFlow()
 
-    fun onNameChange(name: String) {
-        _newClientName.value = name
-    }
+    fun onNameChange(name: String) { _newClientName.value = name }
 
     fun addClient() {
         val name = _newClientName.value.trim()
