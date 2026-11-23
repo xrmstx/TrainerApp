@@ -21,9 +21,9 @@ interface AppDao {
     @Insert
     suspend fun insertWorkout(workout: Workout): Long
 
-    // Получаем все блоки для тренировки (Разминка, Основа, Заминка)
+    // Синхронный метод для поиска блока (для исправления бага)
     @Query("SELECT * FROM exercise_blocks WHERE workoutId = :workoutId")
-    fun getBlocksForWorkout(workoutId: Long): Flow<List<ExerciseBlock>>
+    suspend fun getBlocksForWorkoutSync(workoutId: Long): List<ExerciseBlock>
 
     @Query("SELECT * FROM template_exercises WHERE blockId = :blockId ORDER BY `order` ASC")
     fun getExercisesForBlock(blockId: Long): Flow<List<TemplateExercise>>
@@ -46,7 +46,6 @@ interface AppDao {
     @Insert
     suspend fun insertClientWorkout(workout: ClientWorkout): Long
 
-    // Получаем все упражнения для тренировки клиента, разбитые по секциям
     @Query("SELECT * FROM client_exercises WHERE clientWorkoutId = :workoutId ORDER BY section ASC, `order` ASC")
     fun getClientExercises(workoutId: Long): Flow<List<ClientExercise>>
     @Insert
