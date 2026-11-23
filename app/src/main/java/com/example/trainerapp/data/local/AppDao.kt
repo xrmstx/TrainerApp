@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface AppDao {
+    // --- Клиенты ---
     @Query("SELECT * FROM clients ORDER BY name ASC")
     fun getAllClients(): Flow<List<Client>>
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -13,6 +14,7 @@ interface AppDao {
     @Query("DELETE FROM clients WHERE id = :clientId")
     suspend fun deleteClient(clientId: Long)
 
+    // --- Шаблоны ---
     @Query("SELECT * FROM macrocycles")
     fun getAllMacrocycles(): Flow<List<Macrocycle>>
     @Insert
@@ -20,16 +22,23 @@ interface AppDao {
     @Query("DELETE FROM macrocycles WHERE id = :macroId")
     suspend fun deleteMacrocycle(macroId: Long)
 
+    // --- Тренировки (Дни) ---
     @Query("SELECT * FROM workouts WHERE mesocycleId = :macroId ORDER BY dayNumber ASC")
     fun getWorkoutsForMacro(macroId: Long): Flow<List<Workout>>
     @Insert
     suspend fun insertWorkout(workout: Workout): Long
-
+    @Query("DELETE FROM workouts WHERE id = :workoutId")
+    suspend fun deleteWorkout(workoutId: Long)
+    
     @Query("SELECT * FROM workouts WHERE mesocycleId = :macroId ORDER BY dayNumber ASC")
     suspend fun getWorkoutsForMacroSync(macroId: Long): List<Workout>
 
+    // --- Упражнения (Блоки и Шаблоны) ---
     @Query("SELECT * FROM exercise_blocks WHERE workoutId = :workoutId")
     suspend fun getBlocksForWorkoutSync(workoutId: Long): List<ExerciseBlock>
+
+    @Query("SELECT * FROM exercise_blocks WHERE workoutId = :workoutId LIMIT 1")
+    suspend fun getBlockForWorkout(workoutId: Long): ExerciseBlock?
 
     @Query("SELECT * FROM template_exercises WHERE blockId = :blockId ORDER BY `order` ASC")
     fun getExercisesForBlock(blockId: Long): Flow<List<TemplateExercise>>
@@ -44,6 +53,11 @@ interface AppDao {
     @Query("DELETE FROM template_exercises WHERE id = :exerciseId")
     suspend fun deleteTemplateExercise(exerciseId: Long)
 
+    // Библиотека (уникальные упражнения)
+    @Query("SELECT * FROM template_exercises GROUP BY exerciseName ORDER BY id DESC")
+    suspend fun getUniqueExercises(): List<TemplateExercise>
+
+    // --- Программы клиентов ---
     @Query("SELECT * FROM client_programs WHERE clientId = :clientId ORDER BY weekNumber ASC")
     fun getProgramsForClient(clientId: Long): Flow<List<ClientProgram>>
     @Insert
@@ -61,6 +75,7 @@ interface AppDao {
     @Insert
     suspend fun insertClientExercise(exercise: ClientExercise): Long
 
+    // --- Логи ---
     @Query("SELECT * FROM exercise_logs WHERE clientExerciseId = :clientExerciseId ORDER BY date DESC LIMIT 1")
     suspend fun getLastLogForExercise(clientExerciseId: Long): ExerciseLog?
 
@@ -68,4 +83,6 @@ interface AppDao {
     fun getLogsForExercise(clientExerciseId: Long): Flow<List<ExerciseLog>>
     @Insert
     suspend fun insertExerciseLog(log: ExerciseLog): Long
+    @Query("DELETE FROM exercise_logs WHERE id = :logId")
+    suspend fun deleteLog(logId: Long)
 }
