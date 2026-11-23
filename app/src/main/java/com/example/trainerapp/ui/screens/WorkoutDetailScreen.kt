@@ -24,7 +24,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.trainerapp.data.local.AppDatabase
 import com.example.trainerapp.data.model.ExerciseBlock
 import com.example.trainerapp.data.model.TemplateExercise
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class WorkoutDetailViewModel(application: Application, val workoutId: Long) : AndroidViewModel(application) {
@@ -33,15 +35,31 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
     private val _selectedSection = MutableStateFlow("MAIN")
     val selectedSection: StateFlow<String> = _selectedSection.asStateFlow()
 
-    // Реактивно загружаем упражнения для выбранной секции
-    val currentExercises: StateFlow<List<TemplateExercise>> = _selectedSection
-        .flatMapLatest { section ->
-            dao.getBlocksForWorkout(workoutId).flatMapLatest { blocks ->
-                val block = blocks.find { it.section == section }
-                if (block != null) dao.getExercisesForBlock(block.id) else flowOf(emptyList())
+    private val _exercises = MutableStateFlow<List<TemplateExercise>>(emptyList())
+    val exercises: StateFlow<List<TemplateExercise>> = _exercises.asStateFlow()
+
+    init {
+        loadExercises()
+    }
+
+    fun onSectionChange(section: String) {
+        _selectedSection.value = section
+        loadExercises()
+    }
+
+    private fun loadExercises() {
+        viewModelScope.launch {
+            val blocks = dao.getBlocksForWorkoutSync(workoutId)
+            val block = blocks.find { it.section == _selectedSection.value }
+            if (block != null) {
+                dao.getExercisesForBlock(block.id).collect { list ->
+                    _exercises.value = list
+                }
+            } else {
+                _exercises.value = emptyList()
             }
         }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }
 
     private val _showDialog = MutableStateFlow(false)
     val showDialog: StateFlow<Boolean> = _showDialog.asStateFlow()
@@ -57,7 +75,6 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
     val exNote: StateFlow<String> = _exNote.asStateFlow()
     val exType: StateFlow<String> = _exType.asStateFlow()
 
-    fun onSectionChange(section: String) { _selectedSection.value = section }
     fun onNameChange(name: String) { _exName.value = name }
     fun onSetsChange(sets: String) { _exSets.value = sets }
     fun onRepsChange(reps: String) { _exReps.value = reps }
@@ -75,30 +92,29 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
 
         if (name.isNotEmpty() && sets > 0 && reps.isNotEmpty()) {
             viewModelScope.launch {
-                // Ищем существующий блок для этой секции или создаем новый
                 var blockId: Long? = null
-                dao.getBlocksForWorkout(workoutId).collect { blockList ->
-                    val existingBlock = blockList.find { it.section == section }
-                    blockId = if (existingBlock != null) {
-                        existingBlock.id
-                    } else {
-                        dao.insertExerciseBlock(ExerciseBlock(workoutId = workoutId, section = section, blockType = type))
-                    }
-                    return@collect
+                val existingBlocks = dao.getBlocksForWorkoutSync(workoutId)
+                val existingBlock = existingBlocks.find { it.section == section }
+                
+                blockId = if (existingBlock != null) {
+                    existingBlock.id
+                } else {
+                    dao.insertExerciseBlock(ExerciseBlock(workoutId = workoutId, section = section, blockType = type))
                 }
 
                 if (blockId != null) {
                     dao.insertTemplateExercise(
                         TemplateExercise(
-                            blockId = blockId!!,
+                            blockId = blockId,
                             exerciseName = name,
-                            order = currentExercises.value.size + 1,
+                            order = _exercises.value.size + 1,
                             targetSets = sets,
                             targetReps = reps,
                             targetWeight = null,
                             note = note.ifEmpty { null }
                         )
                     )
+                    loadExercises() // Обновляем список
                 }
                 toggleDialog()
             }
@@ -123,7 +139,7 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
     val application = context.applicationContext as Application
     val viewModel: WorkoutDetailViewModel = viewModel(factory = WorkoutDetailViewModelFactory(application, workoutId))
 
-    val exercises by viewModel.currentExercises.collectAsState()
+    val exercises by viewModel.exercises.collectAsState()
     val selectedSection by viewModel.selectedSection.collectAsState()
     val showDialog by viewModel.showDialog.collectAsState()
     
@@ -168,11 +184,7 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
             TopAppBar(
                 title = { Text(workoutName) },
                 navigationIcon = { IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, contentDescription = "Назад") } },
-                actions = { 
-                    IconButton(onClick = { /* Шаринг */ }) { 
-                        Icon(Icons.Default.Share, contentDescription = "Поделиться") 
-                    } 
-                }
+                actions = { IconButton(onClick = { /* Шаринг */ }) { Icon(Icons.Default.Share, contentDescription = "Поделиться") } }
             )
         },
         floatingActionButton = {
