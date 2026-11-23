@@ -49,9 +49,7 @@ class ClientDetailViewModel(application: Application, val clientId: Long) : Andr
 
     init {
         viewModelScope.launch {
-            dao.getAllClients().collect { list ->
-                _client.value = list.find { it.id == clientId }
-            }
+            dao.getAllClients().collect { list -> _client.value = list.find { it.id == clientId } }
         }
     }
 
@@ -66,15 +64,8 @@ class ClientDetailViewModel(application: Application, val clientId: Long) : Andr
         }
     }
 
-    fun deleteClient() {
-        viewModelScope.launch {
-            dao.deleteClient(clientId)
-        }
-    }
-
-    fun deleteProgram(programId: Long) {
-        viewModelScope.launch { dao.deleteClientProgram(programId) }
-    }
+    fun deleteClient() { viewModelScope.launch { dao.deleteClient(clientId) } }
+    fun deleteProgram(programId: Long) { viewModelScope.launch { dao.deleteClientProgram(programId) } }
 
     fun assignProgram(macrocycle: Macrocycle) {
         viewModelScope.launch {
@@ -82,12 +73,10 @@ class ClientDetailViewModel(application: Application, val clientId: Long) : Andr
                 ClientProgram(clientId = clientId, macrocycleId = macrocycle.id, weekNumber = 1, totalWeeks = macrocycle.durationWeeks)
             )
             val originalWorkouts = dao.getWorkoutsForMacroSync(macrocycle.id)
-            
             originalWorkouts.forEach { origWorkout ->
                 val newWorkoutId = dao.insertClientWorkout(
                     ClientWorkout(clientProgramId = programId, originalWorkoutId = origWorkout.id, dayNumber = origWorkout.dayNumber, name = origWorkout.name)
                 )
-                
                 val blocks = dao.getBlocksForWorkoutSync(origWorkout.id)
                 blocks.forEach { block ->
                     val exercises = dao.getExercisesForBlockSync(block.id)
@@ -109,10 +98,7 @@ class ClientDetailViewModel(application: Application, val clientId: Long) : Andr
 
 class ClientDetailViewModelFactory(private val application: Application, private val clientId: Long) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(ClientDetailViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
-            return ClientDetailViewModel(application, clientId) as T
-        }
+        if (modelClass.isAssignableFrom(ClientDetailViewModel::class.java)) { @Suppress("UNCHECKED_CAST") return ClientDetailViewModel(application, clientId) as T }
         throw IllegalArgumentException("Unknown ViewModel class")
     }
 }
@@ -140,7 +126,7 @@ fun ClientDetailScreen(clientId: Long, onBackClick: () -> Unit, onProgramClick: 
                 Column {
                     OutlinedTextField(value = goal, onValueChange = { goal = it }, label = { Text("Цель") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
                     Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(value = notes, onValueChange = { notes = it }, label = { Text("Заметки (травмы, аллергии)") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
+                    OutlinedTextField(value = notes, onValueChange = { notes = it }, label = { Text("Заметки") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
                 }
             },
             confirmButton = { TextButton(onClick = { viewModel.updateClient(goal, notes) }) { Text("Сохранить") } },
@@ -179,7 +165,6 @@ fun ClientDetailScreen(clientId: Long, onBackClick: () -> Unit, onProgramClick: 
         }
     ) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)) {
-            // Карточка профиля
             Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), elevation = CardDefaults.cardElevation(3.dp)) {
                 Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Цель: ${client?.goal ?: "Не задана"}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -188,8 +173,6 @@ fun ClientDetailScreen(clientId: Long, onBackClick: () -> Unit, onProgramClick: 
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
-            
-            // Кнопки
             Button(onClick = { viewModel.toggleDialog() }, modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(12.dp)) {
                 Icon(Icons.Default.Add, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
@@ -201,21 +184,16 @@ fun ClientDetailScreen(clientId: Long, onBackClick: () -> Unit, onProgramClick: 
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("История тренировок")
             }
-
             Spacer(modifier = Modifier.height(24.dp))
             Text("Активные программы:", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(8.dp))
-            
             if (programs.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Нет назначенных программ", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)) }
             } else {
                 LazyColumn {
                     items(programs) { prog ->
                         Card(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp).combinedClickable(
-                                onClick = { onProgramClick(prog.id) },
-                                onLongClick = { viewModel.deleteProgram(prog.id) }
-                            ),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp).combinedClickable(onClick = { onProgramClick(prog.id) }, onLongClick = { viewModel.deleteProgram(prog.id) }),
                             shape = RoundedCornerShape(18.dp), elevation = CardDefaults.cardElevation(3.dp)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
@@ -224,7 +202,12 @@ fun ClientDetailScreen(clientId: Long, onBackClick: () -> Unit, onProgramClick: 
                                     Text("Неделя ${prog.weekNumber} из ${prog.totalWeeks}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
                                 }
                                 Spacer(modifier = Modifier.height(8.dp))
-                                LinearProgressIndicator(progress = { prog.weekNumber.toFloat() / prog.totalWeeks }, modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.primary)
+                                // ИСПРАВЛЕНИЕ: Используем лямбду для прогресса
+                                LinearProgressIndicator(
+                                    progress = { prog.weekNumber.toFloat() / prog.totalWeeks },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
                             }
                         }
                     }
