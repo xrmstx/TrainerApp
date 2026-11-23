@@ -19,39 +19,27 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.trainerapp.data.local.AppDatabase
-import com.example.trainerapp.data.model.Workout
+import com.example.trainerapp.data.model.ClientWorkout
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class ClientProgramDetailViewModel(application: Application, clientProgramId: Long) : AndroidViewModel(application) {
+class ClientProgramDetailViewModel(application: Application, val programId: Long) : AndroidViewModel(application) {
     private val dao = AppDatabase.getDatabase(application).appDao()
 
-    private val programFlow = dao.getProgramById(clientProgramId)
-    val workouts = MutableStateFlow<List<Workout>>(emptyList())
-
-    init {
-        viewModelScope.launch {
-            programFlow.collect { prog ->
-                if (prog != null && prog.templateWorkoutId != null) {
-                    dao.getWorkoutsForMacro(prog.templateWorkoutId).collect { list ->
-                        workouts.value = list
-                    }
-                }
-            }
-        }
-    }
+    // Загружаем скопированные тренировки клиента
+    val workouts = dao.getClientWorkoutsForProgram(programId)
 }
 
 class ClientProgramDetailViewModelFactory(
     private val application: Application,
-    private val clientProgramId: Long
+    private val programId: Long
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(ClientProgramDetailViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return ClientProgramDetailViewModel(application, clientProgramId) as T
+            return ClientProgramDetailViewModel(application, programId) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }
@@ -60,17 +48,17 @@ class ClientProgramDetailViewModelFactory(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ClientProgramDetailScreen(
-    clientProgramId: Long,
+    programId: Long,
     onBackClick: () -> Unit,
     onWorkoutClick: (Long, String) -> Unit
 ) {
     val context = LocalContext.current
     val application = context.applicationContext as Application
     val viewModel: ClientProgramDetailViewModel = viewModel(
-        factory = ClientProgramDetailViewModelFactory(application, clientProgramId)
+        factory = ClientProgramDetailViewModelFactory(application, programId)
     )
 
-    val workouts by viewModel.workouts.collectAsState()
+    val workouts by viewModel.workouts.collectAsState(initial = emptyList())
 
     Scaffold(
         topBar = {
