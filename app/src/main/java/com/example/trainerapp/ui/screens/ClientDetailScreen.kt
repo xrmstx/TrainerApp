@@ -16,6 +16,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -27,6 +28,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.trainerapp.data.local.AppDatabase
 import com.example.trainerapp.data.model.*
+import com.example.trainerapp.ui.theme.AccentOrange
+import com.example.trainerapp.ui.theme.AccentPink
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -46,18 +49,13 @@ class ClientDetailViewModel(application: Application, val clientId: Long) : Andr
         viewModelScope.launch { dao.deleteClientProgram(programId) }
     }
 
-    // ИСПРАВЛЕННЫЙ МЕТОД КОПИРОВАНИЯ
     fun assignProgram(macrocycle: Macrocycle) {
         viewModelScope.launch {
-            // 1. Создаем программу
             val programId = dao.insertClientProgram(
                 ClientProgram(clientId = clientId, macrocycleId = macrocycle.id, weekNumber = 1)
             )
-            
-            // 2. Получаем тренировки шаблона (синхронно)
             val originalWorkouts = dao.getWorkoutsForMacroSync(macrocycle.id)
             
-            // 3. Копируем
             originalWorkouts.forEach { origWorkout ->
                 val newWorkoutId = dao.insertClientWorkout(
                     ClientWorkout(
@@ -68,7 +66,6 @@ class ClientDetailViewModel(application: Application, val clientId: Long) : Andr
                     )
                 )
                 
-                // Копируем упражнения
                 val block = dao.getBlockForWorkout(origWorkout.id)
                 if (block != null) {
                     val exercises = dao.getExercisesForBlockSync(block.id)
@@ -138,7 +135,7 @@ fun ClientDetailScreen(clientId: Long, clientName: String, onBackClick: () -> Un
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(clientName) },
+                title = { Text(clientName, fontWeight = FontWeight.Bold) },
                 navigationIcon = { IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, contentDescription = "Назад") } }
             )
         }
@@ -146,12 +143,21 @@ fun ClientDetailScreen(clientId: Long, clientName: String, onBackClick: () -> Un
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)) {
             Button(
                 onClick = { viewModel.toggleDialog() }, 
-                modifier = Modifier.fillMaxWidth().height(50.dp),
-                shape = RoundedCornerShape(12.dp)
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                contentPadding = PaddingValues()
             ) {
-                Icon(Icons.Default.Add, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Назначить программу")
+                Box(
+                    modifier = Modifier.fillMaxSize().background(Brush.linearGradient(listOf(AccentOrange, AccentPink)), RoundedCornerShape(16.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Add, contentDescription = null, tint = Color.White)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Назначить программу", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
             Spacer(modifier = Modifier.height(24.dp))
             Text("Активные программы:", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -167,18 +173,18 @@ fun ClientDetailScreen(clientId: Long, clientName: String, onBackClick: () -> Un
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp).combinedClickable(
                                 onClick = { onProgramClick(prog.id) },
-                                onLongClick = { viewModel.deleteProgram(prog.id) } // <-- Удаление долгим нажатием
+                                onLongClick = { viewModel.deleteProgram(prog.id) }
                             ),
-                            shape = RoundedCornerShape(16.dp),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                            shape = RoundedCornerShape(18.dp),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                         ) {
                             Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text("Программа (ID: ${prog.macrocycleId})", style = MaterialTheme.typography.titleMedium)
-                                    Text("Неделя: ${prog.weekNumber}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                                    Text("Программа (ID: ${prog.macrocycleId})", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                    Text("Неделя: ${prog.weekNumber}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                                 }
-                                Icon(Icons.Default.Delete, contentDescription = "Удалить", tint = Color.Red.copy(alpha = 0.5f))
+                                Icon(Icons.Default.Delete, contentDescription = "Удалить", tint = Color.Red.copy(alpha = 0.4f))
                             }
                         }
                     }
