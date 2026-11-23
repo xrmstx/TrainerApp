@@ -58,32 +58,23 @@ class MainActivity : ComponentActivity() {
                             val id = backStackEntry.arguments?.getString("clientId")?.toLongOrNull() ?: 0L
                             val name = backStackEntry.arguments?.getString("clientName") ?: ""
                             ClientDetailScreen(
-                                clientId = id,
-                                clientName = name,
+                                clientId = id, clientName = name,
                                 onBackClick = { navController.popBackStack() },
-                                onProgramClick = { programId -> 
-                                    navController.navigate("client_program_detail/$programId") 
-                                }
+                                onProgramClick = { programId -> navController.navigate("client_program_detail/$programId") }
                             )
                         }
                         composable("client_program_detail/{programId}") { backStackEntry ->
                             val programId = backStackEntry.arguments?.getString("programId")?.toLongOrNull() ?: 0L
                             ClientProgramDetailScreen(
-                                programId = programId, // <-- Исправлено имя параметра
+                                programId = programId,
                                 onBackClick = { navController.popBackStack() },
-                                onWorkoutClick = { workoutId, workoutName -> 
-                                    navController.navigate("client_workout_log/$workoutId/$workoutName") 
-                                }
+                                onWorkoutClick = { workoutId, workoutName -> navController.navigate("client_workout_log/$workoutId/$workoutName") }
                             )
                         }
                         composable("client_workout_log/{workoutId}/{workoutName}") { backStackEntry ->
                             val workoutId = backStackEntry.arguments?.getString("workoutId")?.toLongOrNull() ?: 0L
                             val workoutName = backStackEntry.arguments?.getString("workoutName") ?: ""
-                            ClientWorkoutLogScreen(
-                                workoutId = workoutId,
-                                workoutName = workoutName,
-                                onBackClick = { navController.popBackStack() }
-                            )
+                            ClientWorkoutLogScreen(workoutId = workoutId, workoutName = workoutName, onBackClick = { navController.popBackStack() })
                         }
                         
                         composable("templates") {
@@ -93,8 +84,7 @@ class MainActivity : ComponentActivity() {
                             val id = backStackEntry.arguments?.getString("macroId")?.toLongOrNull() ?: 0L
                             val name = backStackEntry.arguments?.getString("macroName") ?: ""
                             MacroDetailScreen(
-                                macroId = id, 
-                                macroName = name, 
+                                macroId = id, macroName = name,
                                 onBackClick = { navController.popBackStack() },
                                 onWorkoutClick = { workoutId, workoutName -> navController.navigate("workout_detail/$workoutId/$workoutName") }
                             )
