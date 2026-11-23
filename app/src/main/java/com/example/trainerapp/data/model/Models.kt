@@ -2,8 +2,6 @@ package com.example.trainerapp.data.model
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
-import androidx.room.ForeignKey
-import androidx.room.Index
 
 @Entity(tableName = "clients")
 data class Client(
@@ -45,28 +43,25 @@ data class TemplateExercise(
     val targetWeight: Double?
 )
 
-// Программа, назначенная клиенту
 @Entity(tableName = "client_programs")
 data class ClientProgram(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val clientId: Long,
-    val macrocycleId: Long, // Ссылка на оригинальный шаблон
+    val macrocycleId: Long,
     val weekNumber: Int,
     val status: String = "PLANNED"
 )
 
-// Копия тренировки для клиента (чтобы менять её независимо от шаблона)
 @Entity(tableName = "client_workouts")
 data class ClientWorkout(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val clientProgramId: Long,
-    val originalWorkoutId: Long, // Ссылка на оригинал
+    val originalWorkoutId: Long,
     val dayNumber: Int,
     val name: String,
-    val status: String = "PLANNED" // PLANNED, DONE
+    val status: String = "PLANNED"
 )
 
-// Копия упражнения для клиента
 @Entity(tableName = "client_exercises")
 data class ClientExercise(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -77,7 +72,6 @@ data class ClientExercise(
     val targetReps: String
 )
 
-// Логи выполнения (что реально сделал клиент)
 @Entity(tableName = "exercise_logs")
 data class ExerciseLog(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -85,5 +79,5 @@ data class ExerciseLog(
     val actualSets: Int,
     val actualReps: Int,
     val actualWeight: Double,
-    val date: Long = System.currentTimeMillis() // Дата выполнения
+    val date: Long = System.currentTimeMillis()
 )
