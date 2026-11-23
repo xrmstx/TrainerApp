@@ -7,7 +7,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.History // <-- Добавлен импорт
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -128,8 +127,9 @@ fun ClientWorkoutLogScreen(
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(ex.exerciseName, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                                    IconButton(onClick = { viewModel.showHistory(ex.exerciseName, ex.id) }) {
-                                        Icon(Icons.Default.History, contentDescription = "История")
+                                    // Заменили иконку на текстовую кнопку
+                                    TextButton(onClick = { viewModel.showHistory(ex.exerciseName, ex.id) }) {
+                                        Text("История")
                                     }
                                 }
                                 Text("План: ${ex.targetSets} x ${ex.targetReps}", style = MaterialTheme.typography.bodySmall)
