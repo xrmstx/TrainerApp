@@ -19,7 +19,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.trainerapp.data.local.AppDatabase
-import com.example.trainerapp.data.model.*
+import com.example.trainerapp.data.model.ClientProgram
+import com.example.trainerapp.data.model.Macrocycle
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,48 +36,53 @@ class ClientDetailViewModel(application: Application, val clientId: Long) : Andr
 
     fun toggleDialog() { _showDialog.value = !_showDialog.value }
 
-    // Глубокое копирование шаблона в программу клиента
     fun assignProgram(macrocycle: Macrocycle) {
         viewModelScope.launch {
-            // 1. Создаем программу
-            val programId = dao.insertClientProgram(
-                ClientProgram(clientId = clientId, macrocycleId = macrocycle.id, weekNumber = 1)
-            )
-            // 2. Получаем тренировки шаблона
-            val originalWorkouts = dao.getWorkoutsForMacro(macrocycle.id).let { 
-                // Получаем один раз (для Flow нужно collect, но для простоты запуска используем первый сбор)
-                // В реальном приложении лучше через suspend-запрос. Для MVP сойдет.
-                var list: List<Workout> = emptyList()
-                kotlinx.coroutines.runBlocking { 
-                    dao.getWorkoutsForMacro(macrocycle.id).collect { list = it; return@collect } 
-                }
-                list
+            // Глубокое копирование
+            val programId = dao.insertClientProgram(ClientProgram(clientId = clientId, macrocycleId = macrocycle.id, weekNumber = 1))
+            
+            val originalWorkouts = mutableListOf<com.example.trainerapp.data.model.Workout>()
+            dao.getWorkoutsForMacro(macrocycle.id).collect { list ->
+                originalWorkouts.clear()
+                originalWorkouts.addAll(list)
+                return@collect
             }
-            // 3. Копируем тренировки и упражнения
+
             originalWorkouts.forEach { origWorkout ->
                 val newWorkoutId = dao.insertClientWorkout(
-                    ClientWorkout(
+                    com.example.trainerapp.data.model.ClientWorkout(
                         clientProgramId = programId,
                         originalWorkoutId = origWorkout.id,
                         dayNumber = origWorkout.dayNumber,
                         name = origWorkout.name
                     )
                 )
-                // Копируем упражнения внутри тренировки
-                // (Тут нужен запрос, чтобы получить упражнения блока. Пока делаем упрощенно)
-                // В идеале нужно создать запрос getExercisesForWorkout(origWorkout.id)
-                // Для простоты MVP: просто скопируем всё, что есть в блоках этого workout
-                // (Этот код нужно будет доработать в следующей итерации)
+                
+                val exercises = mutableListOf<com.example.trainerapp.data.model.TemplateExercise>()
+                dao.getExercisesForBlock(origWorkout.id).collect { list ->
+                    exercises.clear()
+                    exercises.addAll(list)
+                    return@collect
+                }
+
+                exercises.forEach { ex ->
+                    dao.insertClientExercise(
+                        com.example.trainerapp.data.model.ClientExercise(
+                            clientWorkoutId = newWorkoutId,
+                            exerciseName = ex.exerciseName,
+                            order = ex.order,
+                            targetSets = ex.targetSets,
+                            targetReps = ex.targetReps
+                        )
+                    )
+                }
             }
             toggleDialog()
         }
     }
 }
 
-class ClientDetailViewModelFactory(
-    private val application: Application,
-    private val clientId: Long
-) : ViewModelProvider.Factory {
+class ClientDetailViewModelFactory(private val application: Application, private val clientId: Long) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(ClientDetailViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
@@ -88,12 +94,7 @@ class ClientDetailViewModelFactory(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ClientDetailScreen(
-    clientId: Long,
-    clientName: String,
-    onBackClick: () -> Unit,
-    onProgramClick: (Long) -> Unit
-) {
+fun ClientDetailScreen(clientId: Long, clientName: String, onBackClick: () -> Unit, onProgramClick: (Long) -> Unit) {
     val context = LocalContext.current
     val application = context.applicationContext as Application
     val viewModel: ClientDetailViewModel = viewModel(factory = ClientDetailViewModelFactory(application, clientId))
@@ -111,8 +112,8 @@ fun ClientDetailScreen(
                 else LazyColumn {
                     items(templates) { macro ->
                         Card(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-                                .clickable { viewModel.assignProgram(macro) }
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { viewModel.assignProgram(macro) },
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                         ) {
                             Text(macro.name, modifier = Modifier.padding(16.dp))
                         }
@@ -137,17 +138,20 @@ fun ClientDetailScreen(
             }
             Spacer(modifier = Modifier.height(16.dp))
             Text("Активные программы:", style = MaterialTheme.typography.titleMedium)
+            
             if (programs.isEmpty()) {
-                Text("Нет назначенных программ", style = MaterialTheme.typography.bodyMedium)
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Нет назначенных программ", style = MaterialTheme.typography.bodyLarge)
+                }
             } else {
                 LazyColumn {
                     items(programs) { prog ->
                         Card(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-                                .clickable { onProgramClick(prog.id) }
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { onProgramClick(prog.id) },
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
-                                Text("Программа (Шаблон ID: ${prog.macrocycleId})", style = MaterialTheme.typography.bodyLarge)
+                                Text("Программа (ID: ${prog.macrocycleId})", style = MaterialTheme.typography.titleMedium)
                                 Text("Неделя: ${prog.weekNumber}", style = MaterialTheme.typography.bodyMedium)
                             }
                         }
