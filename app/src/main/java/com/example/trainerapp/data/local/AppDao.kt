@@ -21,18 +21,12 @@ interface AppDao {
     @Insert
     suspend fun insertWorkout(workout: Workout): Long
 
-    // Прямые (suspend) запросы для копирования
-    @Query("SELECT * FROM workouts WHERE mesocycleId = :macroId ORDER BY dayNumber ASC")
-    suspend fun getWorkoutsForMacroSync(macroId: Long): List<Workout>
-
-    @Query("SELECT * FROM exercise_blocks WHERE workoutId = :workoutId LIMIT 1")
-    suspend fun getBlockForWorkout(workoutId: Long): ExerciseBlock?
+    // Получаем все блоки для тренировки (Разминка, Основа, Заминка)
+    @Query("SELECT * FROM exercise_blocks WHERE workoutId = :workoutId")
+    fun getBlocksForWorkout(workoutId: Long): Flow<List<ExerciseBlock>>
 
     @Query("SELECT * FROM template_exercises WHERE blockId = :blockId ORDER BY `order` ASC")
     fun getExercisesForBlock(blockId: Long): Flow<List<TemplateExercise>>
-
-    @Query("SELECT * FROM template_exercises WHERE blockId = :blockId ORDER BY `order` ASC")
-    suspend fun getExercisesForBlockSync(blockId: Long): List<TemplateExercise>
 
     @Insert
     suspend fun insertExerciseBlock(block: ExerciseBlock): Long
@@ -44,8 +38,6 @@ interface AppDao {
     fun getProgramsForClient(clientId: Long): Flow<List<ClientProgram>>
     @Insert
     suspend fun insertClientProgram(program: ClientProgram): Long
-
-    // Удаление программы
     @Query("DELETE FROM client_programs WHERE id = :programId")
     suspend fun deleteClientProgram(programId: Long)
 
@@ -54,12 +46,16 @@ interface AppDao {
     @Insert
     suspend fun insertClientWorkout(workout: ClientWorkout): Long
 
-    @Query("SELECT * FROM client_exercises WHERE clientWorkoutId = :workoutId ORDER BY `order` ASC")
+    // Получаем все упражнения для тренировки клиента, разбитые по секциям
+    @Query("SELECT * FROM client_exercises WHERE clientWorkoutId = :workoutId ORDER BY section ASC, `order` ASC")
     fun getClientExercises(workoutId: Long): Flow<List<ClientExercise>>
     @Insert
     suspend fun insertClientExercise(exercise: ClientExercise): Long
 
     // --- Логи ---
+    @Query("SELECT * FROM exercise_logs WHERE clientExerciseId = :clientExerciseId ORDER BY date DESC LIMIT 1")
+    suspend fun getLastLogForExercise(clientExerciseId: Long): ExerciseLog?
+
     @Query("SELECT * FROM exercise_logs WHERE clientExerciseId = :clientExerciseId ORDER BY setNumber ASC")
     fun getLogsForExercise(clientExerciseId: Long): Flow<List<ExerciseLog>>
     @Insert
