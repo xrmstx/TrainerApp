@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,42 +21,44 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.trainerapp.data.local.AppDatabase
+import com.example.trainerapp.data.model.ClientExercise
 import com.example.trainerapp.data.model.ExerciseLog
-import com.example.trainerapp.data.model.TemplateExercise
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class ClientWorkoutLogViewModel(application: Application, workoutId: Long, val clientProgramId: Long) : AndroidViewModel(application) {
+class ClientWorkoutLogViewModel(application: Application, workoutId: Long) : AndroidViewModel(application) {
     private val dao = AppDatabase.getDatabase(application).appDao()
 
-    private val _exercises = MutableStateFlow<List<TemplateExercise>>(emptyList())
-    val exercises: StateFlow<List<TemplateExercise>> = _exercises.asStateFlow()
+    val exercises = dao.getClientExercises(workoutId)
 
-    init {
+    private val _historyDialog = MutableStateFlow<Pair<String, List<ExerciseLog>>?>(null)
+    val historyDialog: StateFlow<Pair<String, List<ExerciseLog>>?> = _historyDialog.asStateFlow()
+
+    fun showHistory(exerciseName: String, exerciseId: Long) {
         viewModelScope.launch {
-            dao.getExercisesForWorkout(workoutId).collect { list ->
-                _exercises.value = list
+            // Для простоты берем логи по ID упражнения
+            val logs = mutableListOf<ExerciseLog>()
+            dao.getLogsForExercise(exerciseId).collect { 
+                logs.clear()
+                logs.addAll(it)
+                _historyDialog.value = Pair(exerciseName, logs.toList())
             }
         }
     }
 
-    fun saveLog(exercise: TemplateExercise, actualSets: String, actualReps: String, actualWeight: String) {
-        val sets = actualSets.toIntOrNull() ?: 0
-        val reps = actualReps.toIntOrNull() ?: 0
-        val weight = actualWeight.toDoubleOrNull() ?: 0.0
+    fun closeHistory() { _historyDialog.value = null }
 
-        if (sets > 0 && reps > 0) {
+    fun saveLog(exerciseId: Long, sets: String, reps: String, weight: String) {
+        val s = sets.toIntOrNull() ?: 0
+        val r = reps.toIntOrNull() ?: 0
+        val w = weight.toDoubleOrNull() ?: 0.0
+
+        if (s > 0 && r > 0) {
             viewModelScope.launch {
                 dao.insertExerciseLog(
-                    ExerciseLog(
-                        clientProgramId = clientProgramId,
-                        exerciseName = exercise.exerciseName,
-                        actualSets = sets,
-                        actualReps = reps,
-                        actualWeight = weight
-                    )
+                    ExerciseLog(clientExerciseId = exerciseId, actualSets = s, actualReps = r, actualWeight = w)
                 )
             }
         }
@@ -64,13 +67,12 @@ class ClientWorkoutLogViewModel(application: Application, workoutId: Long, val c
 
 class ClientWorkoutLogViewModelFactory(
     private val application: Application,
-    private val workoutId: Long,
-    private val clientProgramId: Long
+    private val workoutId: Long
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(ClientWorkoutLogViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return ClientWorkoutLogViewModel(application, workoutId, clientProgramId) as T
+            return ClientWorkoutLogViewModel(application, workoutId) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }
@@ -80,33 +82,41 @@ class ClientWorkoutLogViewModelFactory(
 @Composable
 fun ClientWorkoutLogScreen(
     workoutId: Long,
-    clientProgramId: Long,
     workoutName: String,
     onBackClick: () -> Unit
 ) {
     val context = LocalContext.current
     val application = context.applicationContext as Application
-    val viewModel: ClientWorkoutLogViewModel = viewModel(
-        factory = ClientWorkoutLogViewModelFactory(application, workoutId, clientProgramId)
-    )
+    val viewModel: ClientWorkoutLogViewModel = viewModel(factory = ClientWorkoutLogViewModelFactory(application, workoutId))
 
-    val exercises by viewModel.exercises.collectAsState()
+    val exercises by viewModel.exercises.collectAsState(initial = emptyList())
+    val historyDialog by viewModel.historyDialog.collectAsState()
+
+    if (historyDialog != null) {
+        AlertDialog(
+            onDismissRequest = { viewModel.closeHistory() },
+            title = { Text("История: ${historyDialog!!.first}") },
+            text = {
+                if (historyDialog!!.second.isEmpty()) Text("Нет записей.")
+                else LazyColumn {
+                    items(historyDialog!!.second) { log ->
+                        Text("Вес: ${log.actualWeight} кг, ${log.actualSets}x${log.actualReps}")
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { viewModel.closeHistory() }) { Text("Закрыть") } }
+        )
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(workoutName) },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
-                    }
-                }
+                navigationIcon = { IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, contentDescription = "Назад") } }
             )
         }
     ) { paddingValues ->
-        Column(
-            modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)
-        ) {
+        Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)) {
             if (exercises.isEmpty()) {
                 Text("В этой тренировке нет упражнений.", modifier = Modifier.align(Alignment.CenterHorizontally))
             } else {
@@ -116,42 +126,27 @@ fun ClientWorkoutLogScreen(
                         var reps by remember { mutableStateOf(ex.targetReps) }
                         var weight by remember { mutableStateOf("") }
 
-                        Card(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
-                        ) {
+                        Card(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                             Column(modifier = Modifier.padding(16.dp)) {
-                                Text(ex.exerciseName, style = MaterialTheme.typography.titleMedium)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(ex.exerciseName, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                                    IconButton(onClick = { viewModel.showHistory(ex.exerciseName, ex.id) }) {
+                                        Icon(Icons.Default.History, contentDescription = "История")
+                                    }
+                                }
                                 Text("План: ${ex.targetSets} x ${ex.targetReps}", style = MaterialTheme.typography.bodySmall)
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Row {
-                                    OutlinedTextField(
-                                        value = sets,
-                                        onValueChange = { sets = it },
-                                        label = { Text("Подходы") },
-                                        modifier = Modifier.weight(1f),
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                                    )
+                                    OutlinedTextField(value = sets, onValueChange = { sets = it }, label = { Text("Подходы") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    OutlinedTextField(
-                                        value = reps,
-                                        onValueChange = { reps = it },
-                                        label = { Text("Повторы") },
-                                        modifier = Modifier.weight(1f),
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                                    )
+                                    OutlinedTextField(value = reps, onValueChange = { reps = it }, label = { Text("Повторы") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    OutlinedTextField(
-                                        value = weight,
-                                        onValueChange = { weight = it },
-                                        label = { Text("Вес") },
-                                        modifier = Modifier.weight(1f),
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                                    )
+                                    OutlinedTextField(value = weight, onValueChange = { weight = it }, label = { Text("Вес") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
                                 }
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Button(
                                     onClick = { 
-                                        viewModel.saveLog(ex, sets, reps, weight) 
+                                        viewModel.saveLog(ex.id, sets, reps, weight) 
                                         weight = ""
                                     },
                                     modifier = Modifier.align(Alignment.End)
