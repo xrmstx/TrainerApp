@@ -35,17 +35,11 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
     private val _exercises = MutableStateFlow<List<TemplateExercise>>(emptyList())
     val exercises: StateFlow<List<TemplateExercise>> = _exercises.asStateFlow()
     private val _blockId = MutableStateFlow<Long?>(null)
-    val blockId: StateFlow<Long?> = _blockId.asStateFlow()
 
-    // ИСПРАВЛЕНИЕ БАГА: Сначала ищем существующий блок, если нет - создаем
     init {
         viewModelScope.launch {
             val existingBlock = dao.getBlockForWorkout(workoutId)
-            val id = if (existingBlock != null) {
-                existingBlock.id
-            } else {
-                dao.insertExerciseBlock(ExerciseBlock(workoutId = workoutId))
-            }
+            val id = if (existingBlock != null) existingBlock.id else dao.insertExerciseBlock(ExerciseBlock(workoutId = workoutId))
             _blockId.value = id
             dao.getExercisesForBlock(id).collectLatest { list -> _exercises.value = list }
         }
@@ -56,23 +50,27 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
     private val _exName = MutableStateFlow("")
     private val _exSets = MutableStateFlow("")
     private val _exReps = MutableStateFlow("")
+    private val _exNote = MutableStateFlow("")
     val exName: StateFlow<String> = _exName.asStateFlow()
     val exSets: StateFlow<String> = _exSets.asStateFlow()
     val exReps: StateFlow<String> = _exReps.asStateFlow()
+    val exNote: StateFlow<String> = _exNote.asStateFlow()
 
     fun onNameChange(name: String) { _exName.value = name }
     fun onSetsChange(sets: String) { _exSets.value = sets }
     fun onRepsChange(reps: String) { _exReps.value = reps }
-    fun toggleDialog() { _showDialog.value = !_showDialog.value; _exName.value = ""; _exSets.value = ""; _exReps.value = "" }
+    fun onNoteChange(note: String) { _exNote.value = note }
+    fun toggleDialog() { _showDialog.value = !_showDialog.value; _exName.value = ""; _exSets.value = ""; _exReps.value = ""; _exNote.value = "" }
 
     fun addExercise() {
         val name = _exName.value.trim()
         val sets = _exSets.value.trim().toIntOrNull() ?: 0
         val reps = _exReps.value.trim()
+        val note = _exNote.value.trim()
         val block = _blockId.value
         if (name.isNotEmpty() && sets > 0 && reps.isNotEmpty() && block != null) {
             viewModelScope.launch {
-                dao.insertTemplateExercise(TemplateExercise(blockId = block, exerciseName = name, order = _exercises.value.size + 1, targetSets = sets, targetReps = reps, targetWeight = null))
+                dao.insertTemplateExercise(TemplateExercise(blockId = block, exerciseName = name, order = _exercises.value.size + 1, targetSets = sets, targetReps = reps, targetWeight = null, note = note.ifEmpty { null }))
                 toggleDialog()
             }
         }
@@ -101,25 +99,21 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
     val exName by viewModel.exName.collectAsState()
     val exSets by viewModel.exSets.collectAsState()
     val exReps by viewModel.exReps.collectAsState()
+    val exNote by viewModel.exNote.collectAsState()
 
-    // Функция для формирования текста и шаринга
     fun shareWorkout() {
         val text = buildString {
             appendLine("🏋️ Тренировка: $workoutName")
             appendLine("")
             exercises.forEachIndexed { index, ex ->
                 appendLine("${index + 1}. ${ex.exerciseName} — ${ex.targetSets}x${ex.targetReps}")
+                if (ex.note != null) appendLine("   📝 ${ex.note}")
             }
             appendLine("")
             appendLine("💪 Хорошей тренировки!")
         }
-        val sendIntent = Intent().apply {
-            action = Intent.ACTION_SEND
-            putExtra(Intent.EXTRA_TEXT, text)
-            type = "text/plain"
-        }
-        val shareIntent = Intent.createChooser(sendIntent, "Поделиться планом")
-        context.startActivity(shareIntent)
+        val sendIntent = Intent().apply { action = Intent.ACTION_SEND; putExtra(Intent.EXTRA_TEXT, text); type = "text/plain" }
+        context.startActivity(Intent.createChooser(sendIntent, "Поделиться планом"))
     }
 
     if (showDialog) {
@@ -135,6 +129,8 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
                         Spacer(modifier = Modifier.width(8.dp))
                         OutlinedTextField(value = exReps, onValueChange = { viewModel.onRepsChange(it) }, label = { Text("Повторы") }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp))
                     }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(value = exNote, onValueChange = { viewModel.onNoteChange(it) }, label = { Text("Заметка (отдых, техника)") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
                 }
             },
             confirmButton = { TextButton(onClick = { viewModel.addExercise() }) { Text("Добавить") } },
@@ -147,11 +143,7 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
             TopAppBar(
                 title = { Text(workoutName) },
                 navigationIcon = { IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, contentDescription = "Назад") } },
-                actions = {
-                    IconButton(onClick = { shareWorkout() }) {
-                        Icon(Icons.Default.Share, contentDescription = "Поделиться")
-                    }
-                }
+                actions = { IconButton(onClick = { shareWorkout() }) { Icon(Icons.Default.Share, contentDescription = "Поделиться") } }
             )
         },
         floatingActionButton = {
@@ -176,6 +168,7 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text(ex.exerciseName, style = MaterialTheme.typography.titleMedium)
                                 Text("План: ${ex.targetSets} x ${ex.targetReps}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                                if (ex.note != null) Text("📝 ${ex.note}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                             }
                         }
                     }
