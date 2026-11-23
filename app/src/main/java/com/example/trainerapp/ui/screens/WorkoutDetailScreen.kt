@@ -53,12 +53,7 @@ class WorkoutDetailViewModel(application: Application, workoutId: Long) : Androi
     fun onNameChange(name: String) { _exName.value = name }
     fun onSetsChange(sets: String) { _exSets.value = sets }
     fun onRepsChange(reps: String) { _exReps.value = reps }
-    fun toggleDialog() {
-        _showDialog.value = !_showDialog.value
-        _exName.value = ""
-        _exSets.value = ""
-        _exReps.value = ""
-    }
+    fun toggleDialog() { _showDialog.value = !_showDialog.value; _exName.value = ""; _exSets.value = ""; _exReps.value = "" }
 
     fun addExercise() {
         val name = _exName.value.trim()
@@ -67,26 +62,14 @@ class WorkoutDetailViewModel(application: Application, workoutId: Long) : Androi
         val blockId = _blockId.value
         if (name.isNotEmpty() && sets > 0 && reps.isNotEmpty() && blockId != null) {
             viewModelScope.launch {
-                dao.insertTemplateExercise(
-                    TemplateExercise(
-                        blockId = blockId,
-                        exerciseName = name,
-                        order = _exercises.value.size + 1,
-                        targetSets = sets,
-                        targetReps = reps,
-                        targetWeight = null
-                    )
-                )
+                dao.insertTemplateExercise(TemplateExercise(blockId = blockId, exerciseName = name, order = _exercises.value.size + 1, targetSets = sets, targetReps = reps, targetWeight = null))
                 toggleDialog()
             }
         }
     }
 }
 
-class WorkoutDetailViewModelFactory(
-    private val application: Application,
-    private val workoutId: Long
-) : ViewModelProvider.Factory {
+class WorkoutDetailViewModelFactory(private val application: Application, private val workoutId: Long) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(WorkoutDetailViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
@@ -98,11 +81,7 @@ class WorkoutDetailViewModelFactory(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WorkoutDetailScreen(
-    workoutId: Long,
-    workoutName: String,
-    onBackClick: () -> Unit
-) {
+fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () -> Unit) {
     val context = LocalContext.current
     val application = context.applicationContext as Application
     val viewModel: WorkoutDetailViewModel = viewModel(factory = WorkoutDetailViewModelFactory(application, workoutId))
@@ -146,14 +125,19 @@ fun WorkoutDetailScreen(
     ) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)) {
             if (exercises.isEmpty()) {
-                Text("Нет упражнений. Нажмите + чтобы добавить.", modifier = Modifier.align(Alignment.CenterHorizontally))
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Нет упражнений. Нажмите + чтобы добавить.")
+                }
             } else {
                 LazyColumn {
                     items(exercises) { ex ->
-                        Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                        ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text(ex.exerciseName, style = MaterialTheme.typography.titleMedium)
-                                Text("${ex.targetSets} x ${ex.targetReps}", style = MaterialTheme.typography.bodyMedium)
+                                Text("План: ${ex.targetSets} x ${ex.targetReps}", style = MaterialTheme.typography.bodyMedium)
                             }
                         }
                     }
