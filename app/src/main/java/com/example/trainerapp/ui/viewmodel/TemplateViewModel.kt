@@ -33,4 +33,8 @@ class TemplateViewModel(application: Application) : AndroidViewModel(application
             }
         }
     }
+
+    fun deleteMacrocycle(id: Long) {
+        viewModelScope.launch { dao.deleteMacrocycle(id) }
+    }
 }
