@@ -28,23 +28,15 @@ import kotlinx.coroutines.launch
 
 class MacroDetailViewModel(application: Application, val macroId: Long) : AndroidViewModel(application) {
     private val dao = AppDatabase.getDatabase(application).appDao()
-
     val workouts = dao.getWorkoutsForMacro(macroId)
 
     private val _showDialog = MutableStateFlow(false)
     val showDialog: StateFlow<Boolean> = _showDialog.asStateFlow()
-
     private val _workoutName = MutableStateFlow("")
     val workoutName: StateFlow<String> = _workoutName.asStateFlow()
 
-    fun onNameChange(name: String) {
-        _workoutName.value = name
-    }
-
-    fun toggleDialog() {
-        _showDialog.value = !_showDialog.value
-        _workoutName.value = ""
-    }
+    fun onNameChange(name: String) { _workoutName.value = name }
+    fun toggleDialog() { _showDialog.value = !_showDialog.value; _workoutName.value = "" }
 
     fun addWorkout(currentCount: Int) {
         val name = _workoutName.value.trim()
@@ -57,10 +49,7 @@ class MacroDetailViewModel(application: Application, val macroId: Long) : Androi
     }
 }
 
-class MacroDetailViewModelFactory(
-    private val application: Application,
-    private val macroId: Long
-) : ViewModelProvider.Factory {
+class MacroDetailViewModelFactory(private val application: Application, private val macroId: Long) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(MacroDetailViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
@@ -73,17 +62,12 @@ class MacroDetailViewModelFactory(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MacroDetailScreen(
-    macroId: Long,
-    macroName: String,
-    onBackClick: () -> Unit,
-    onWorkoutClick: (Long, String) -> Unit
+    macroId: Long, macroName: String,
+    onBackClick: () -> Unit, onWorkoutClick: (Long, String) -> Unit
 ) {
     val context = LocalContext.current
     val application = context.applicationContext as Application
-
-    val viewModel: MacroDetailViewModel = viewModel(
-        factory = MacroDetailViewModelFactory(application, macroId)
-    )
+    val viewModel: MacroDetailViewModel = viewModel(factory = MacroDetailViewModelFactory(application, macroId))
 
     val workouts by viewModel.workouts.collectAsState(initial = emptyList())
     val showDialog by viewModel.showDialog.collectAsState()
@@ -93,23 +77,9 @@ fun MacroDetailScreen(
         AlertDialog(
             onDismissRequest = { viewModel.toggleDialog() },
             title = { Text("Новая тренировка") },
-            text = {
-                OutlinedTextField(
-                    value = workoutName,
-                    onValueChange = { viewModel.onNameChange(it) },
-                    label = { Text("Название (напр. Верх тела)") }
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { viewModel.addWorkout(workouts.size) }) {
-                    Text("Добавить")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.toggleDialog() }) {
-                    Text("Отмена")
-                }
-            }
+            text = { OutlinedTextField(value = workoutName, onValueChange = { viewModel.onNameChange(it) }, label = { Text("Название (напр. Верх тела)") }) },
+            confirmButton = { TextButton(onClick = { viewModel.addWorkout(workouts.size) }) { Text("Добавить") } },
+            dismissButton = { TextButton(onClick = { viewModel.toggleDialog() }) { Text("Отмена") } }
         )
     }
 
@@ -117,38 +87,25 @@ fun MacroDetailScreen(
         topBar = {
             TopAppBar(
                 title = { Text(macroName) },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
-                    }
-                }
+                navigationIcon = { IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, contentDescription = "Назад") } }
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { viewModel.toggleDialog() }) {
-                Icon(Icons.Default.Add, contentDescription = "Добавить тренировку")
-            }
+            FloatingActionButton(onClick = { viewModel.toggleDialog() }) { Icon(Icons.Default.Add, contentDescription = "Добавить тренировку") }
         }
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp)
-        ) {
+        Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)) {
             if (workouts.isEmpty()) {
-                Text(
-                    "Список тренировок пуст. Нажмите + чтобы добавить.",
-                    modifier = Modifier.align(Alignment.CenterHorizontally)
-                )
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Список тренировок пуст. Нажмите + чтобы добавить.")
+                }
             } else {
                 LazyColumn {
                     items(workouts) { workout ->
                         Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp)
-                                .clickable { onWorkoutClick(workout.id, workout.name) }
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                                .clickable { onWorkoutClick(workout.id, workout.name) },
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text("День ${workout.dayNumber}", style = MaterialTheme.typography.labelMedium)
