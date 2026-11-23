@@ -16,26 +16,15 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.trainerapp.data.local.AppDatabase
-import com.example.trainerapp.data.model.ClientWorkout
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 
 class ClientProgramDetailViewModel(application: Application, val programId: Long) : AndroidViewModel(application) {
     private val dao = AppDatabase.getDatabase(application).appDao()
-
-    // Загружаем скопированные тренировки клиента
     val workouts = dao.getClientWorkoutsForProgram(programId)
 }
 
-class ClientProgramDetailViewModelFactory(
-    private val application: Application,
-    private val programId: Long
-) : ViewModelProvider.Factory {
+class ClientProgramDetailViewModelFactory(private val application: Application, private val programId: Long) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(ClientProgramDetailViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
@@ -47,16 +36,10 @@ class ClientProgramDetailViewModelFactory(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ClientProgramDetailScreen(
-    programId: Long,
-    onBackClick: () -> Unit,
-    onWorkoutClick: (Long, String) -> Unit
-) {
+fun ClientProgramDetailScreen(programId: Long, onBackClick: () -> Unit, onWorkoutClick: (Long, String) -> Unit) {
     val context = LocalContext.current
     val application = context.applicationContext as Application
-    val viewModel: ClientProgramDetailViewModel = viewModel(
-        factory = ClientProgramDetailViewModelFactory(application, programId)
-    )
+    val viewModel: ClientProgramDetailViewModel = viewModel(factory = ClientProgramDetailViewModelFactory(application, programId))
 
     val workouts by viewModel.workouts.collectAsState(initial = emptyList())
 
@@ -64,27 +47,21 @@ fun ClientProgramDetailScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Программа клиента") },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
-                    }
-                }
+                navigationIcon = { IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, contentDescription = "Назад") } }
             )
         }
     ) { paddingValues ->
-        Column(
-            modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)
-        ) {
+        Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)) {
             if (workouts.isEmpty()) {
-                Text("Нет тренировок в этой программе.", modifier = Modifier.align(Alignment.CenterHorizontally))
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Нет тренировок в этой программе.", style = MaterialTheme.typography.bodyLarge)
+                }
             } else {
                 LazyColumn {
                     items(workouts) { workout ->
                         Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp)
-                                .clickable { onWorkoutClick(workout.id, workout.name) }
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { onWorkoutClick(workout.id, workout.name) },
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text("День ${workout.dayNumber}", style = MaterialTheme.typography.labelMedium)
