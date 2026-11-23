@@ -21,13 +21,19 @@ interface AppDao {
     @Insert
     suspend fun insertWorkout(workout: Workout): Long
 
-    // Получаем блок для тренировки (нужно для фикса бага)
+    // Прямые (suspend) запросы для копирования
+    @Query("SELECT * FROM workouts WHERE mesocycleId = :macroId ORDER BY dayNumber ASC")
+    suspend fun getWorkoutsForMacroSync(macroId: Long): List<Workout>
+
     @Query("SELECT * FROM exercise_blocks WHERE workoutId = :workoutId LIMIT 1")
     suspend fun getBlockForWorkout(workoutId: Long): ExerciseBlock?
 
     @Query("SELECT * FROM template_exercises WHERE blockId = :blockId ORDER BY `order` ASC")
     fun getExercisesForBlock(blockId: Long): Flow<List<TemplateExercise>>
-    
+
+    @Query("SELECT * FROM template_exercises WHERE blockId = :blockId ORDER BY `order` ASC")
+    suspend fun getExercisesForBlockSync(blockId: Long): List<TemplateExercise>
+
     @Insert
     suspend fun insertExerciseBlock(block: ExerciseBlock): Long
     @Insert
@@ -39,6 +45,10 @@ interface AppDao {
     @Insert
     suspend fun insertClientProgram(program: ClientProgram): Long
 
+    // Удаление программы
+    @Query("DELETE FROM client_programs WHERE id = :programId")
+    suspend fun deleteClientProgram(programId: Long)
+
     @Query("SELECT * FROM client_workouts WHERE clientProgramId = :programId ORDER BY dayNumber ASC")
     fun getClientWorkoutsForProgram(programId: Long): Flow<List<ClientWorkout>>
     @Insert
@@ -49,7 +59,8 @@ interface AppDao {
     @Insert
     suspend fun insertClientExercise(exercise: ClientExercise): Long
 
-    @Query("SELECT * FROM exercise_logs WHERE clientExerciseId = :clientExerciseId ORDER BY date DESC")
+    // --- Логи ---
+    @Query("SELECT * FROM exercise_logs WHERE clientExerciseId = :clientExerciseId ORDER BY setNumber ASC")
     fun getLogsForExercise(clientExerciseId: Long): Flow<List<ExerciseLog>>
     @Insert
     suspend fun insertExerciseLog(log: ExerciseLog): Long
