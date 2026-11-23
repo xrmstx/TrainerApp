@@ -9,9 +9,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -40,10 +38,39 @@ class ClientDetailViewModel(application: Application, val clientId: Long) : Andr
     val programs = dao.getProgramsForClient(clientId)
     val templates = dao.getAllMacrocycles()
 
+    private val _client = MutableStateFlow<Client?>(null)
+    val client: StateFlow<Client?> = _client.asStateFlow()
+
     private val _showDialog = MutableStateFlow(false)
     val showDialog: StateFlow<Boolean> = _showDialog.asStateFlow()
 
+    private val _showEditDialog = MutableStateFlow(false)
+    val showEditDialog: StateFlow<Boolean> = _showEditDialog.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            dao.getAllClients().collect { list ->
+                _client.value = list.find { it.id == clientId }
+            }
+        }
+    }
+
     fun toggleDialog() { _showDialog.value = !_showDialog.value }
+    fun toggleEditDialog() { _showEditDialog.value = !_showEditDialog.value }
+
+    fun updateClient(goal: String, notes: String) {
+        viewModelScope.launch {
+            val current = _client.value ?: return@launch
+            dao.insertClient(current.copy(goal = goal.ifEmpty { null }, notes = notes.ifEmpty { null }))
+            toggleEditDialog()
+        }
+    }
+
+    fun deleteClient() {
+        viewModelScope.launch {
+            dao.deleteClient(clientId)
+        }
+    }
 
     fun deleteProgram(programId: Long) {
         viewModelScope.launch { dao.deleteClientProgram(programId) }
@@ -52,32 +79,24 @@ class ClientDetailViewModel(application: Application, val clientId: Long) : Andr
     fun assignProgram(macrocycle: Macrocycle) {
         viewModelScope.launch {
             val programId = dao.insertClientProgram(
-                ClientProgram(clientId = clientId, macrocycleId = macrocycle.id, weekNumber = 1)
+                ClientProgram(clientId = clientId, macrocycleId = macrocycle.id, weekNumber = 1, totalWeeks = macrocycle.durationWeeks)
             )
             val originalWorkouts = dao.getWorkoutsForMacroSync(macrocycle.id)
             
             originalWorkouts.forEach { origWorkout ->
                 val newWorkoutId = dao.insertClientWorkout(
-                    ClientWorkout(
-                        clientProgramId = programId,
-                        originalWorkoutId = origWorkout.id,
-                        dayNumber = origWorkout.dayNumber,
-                        name = origWorkout.name
-                    )
+                    ClientWorkout(clientProgramId = programId, originalWorkoutId = origWorkout.id, dayNumber = origWorkout.dayNumber, name = origWorkout.name)
                 )
                 
-                val block = dao.getBlockForWorkout(origWorkout.id)
-                if (block != null) {
+                val blocks = dao.getBlocksForWorkoutSync(origWorkout.id)
+                blocks.forEach { block ->
                     val exercises = dao.getExercisesForBlockSync(block.id)
                     exercises.forEach { ex ->
                         dao.insertClientExercise(
                             ClientExercise(
-                                clientWorkoutId = newWorkoutId,
-                                exerciseName = ex.exerciseName,
-                                order = ex.order,
-                                targetSets = ex.targetSets,
-                                targetReps = ex.targetReps,
-                                note = ex.note
+                                clientWorkoutId = newWorkoutId, exerciseName = ex.exerciseName, order = ex.order,
+                                section = block.section, blockType = block.blockType,
+                                targetSets = ex.targetSets, targetReps = ex.targetReps, note = ex.note, metricType = ex.metricType
                             )
                         )
                     }
@@ -100,14 +119,34 @@ class ClientDetailViewModelFactory(private val application: Application, private
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-fun ClientDetailScreen(clientId: Long, clientName: String, onBackClick: () -> Unit, onProgramClick: (Long) -> Unit) {
+fun ClientDetailScreen(clientId: Long, onBackClick: () -> Unit, onProgramClick: (Long) -> Unit, onHistoryClick: () -> Unit) {
     val context = LocalContext.current
     val application = context.applicationContext as Application
     val viewModel: ClientDetailViewModel = viewModel(factory = ClientDetailViewModelFactory(application, clientId))
 
+    val client by viewModel.client.collectAsState()
     val programs by viewModel.programs.collectAsState(initial = emptyList())
     val templates by viewModel.templates.collectAsState(initial = emptyList())
     val showDialog by viewModel.showDialog.collectAsState()
+    val showEditDialog by viewModel.showEditDialog.collectAsState()
+
+    if (showEditDialog) {
+        var goal by remember { mutableStateOf(client?.goal ?: "") }
+        var notes by remember { mutableStateOf(client?.notes ?: "") }
+        AlertDialog(
+            onDismissRequest = { viewModel.toggleEditDialog() },
+            title = { Text("Редактировать профиль") },
+            text = {
+                Column {
+                    OutlinedTextField(value = goal, onValueChange = { goal = it }, label = { Text("Цель") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(value = notes, onValueChange = { notes = it }, label = { Text("Заметки (травмы, аллергии)") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
+                }
+            },
+            confirmButton = { TextButton(onClick = { viewModel.updateClient(goal, notes) }) { Text("Сохранить") } },
+            dismissButton = { TextButton(onClick = { viewModel.toggleEditDialog() }) { Text("Отмена") } }
+        )
+    }
 
     if (showDialog) {
         AlertDialog(
@@ -117,12 +156,7 @@ fun ClientDetailScreen(clientId: Long, clientName: String, onBackClick: () -> Un
                 if (templates.isEmpty()) Text("У вас нет созданных шаблонов.")
                 else LazyColumn {
                     items(templates) { macro ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).combinedClickable(
-                                onClick = { viewModel.assignProgram(macro) }
-                            ),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
+                        Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).combinedClickable(onClick = { viewModel.assignProgram(macro) }), shape = RoundedCornerShape(12.dp)) {
                             Text(macro.name, modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.titleMedium)
                         }
                     }
@@ -135,38 +169,45 @@ fun ClientDetailScreen(clientId: Long, clientName: String, onBackClick: () -> Un
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(clientName, fontWeight = FontWeight.Bold) },
-                navigationIcon = { IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, contentDescription = "Назад") } }
+                title = { Text(client?.name ?: "Профиль", fontWeight = FontWeight.Bold) },
+                navigationIcon = { IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, contentDescription = "Назад") } },
+                actions = {
+                    IconButton(onClick = { viewModel.toggleEditDialog() }) { Icon(Icons.Default.Edit, contentDescription = "Редактировать") }
+                    IconButton(onClick = { viewModel.deleteClient() }) { Icon(Icons.Default.Delete, contentDescription = "Удалить клиента") }
+                }
             )
         }
     ) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)) {
-            Button(
-                onClick = { viewModel.toggleDialog() }, 
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                contentPadding = PaddingValues()
-            ) {
-                Box(
-                    modifier = Modifier.fillMaxSize().background(Brush.linearGradient(listOf(AccentOrange, AccentPink)), RoundedCornerShape(16.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Add, contentDescription = null, tint = Color.White)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Назначить программу", color = Color.White, fontWeight = FontWeight.Bold)
-                    }
+            // Карточка профиля
+            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), elevation = CardDefaults.cardElevation(3.dp)) {
+                Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Цель: ${client?.goal ?: "Не задана"}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Заметки: ${client?.notes ?: "Нет заметок"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
                 }
             }
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Кнопки
+            Button(onClick = { viewModel.toggleDialog() }, modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(12.dp)) {
+                Icon(Icons.Default.Add, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Назначить программу")
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedButton(onClick = onHistoryClick, modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(12.dp)) {
+                Icon(Icons.Default.List, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("История тренировок")
+            }
+
             Spacer(modifier = Modifier.height(24.dp))
             Text("Активные программы:", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(8.dp))
             
             if (programs.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Нет назначенных программ", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f))
-                }
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Нет назначенных программ", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)) }
             } else {
                 LazyColumn {
                     items(programs) { prog ->
@@ -175,16 +216,15 @@ fun ClientDetailScreen(clientId: Long, clientName: String, onBackClick: () -> Un
                                 onClick = { onProgramClick(prog.id) },
                                 onLongClick = { viewModel.deleteProgram(prog.id) }
                             ),
-                            shape = RoundedCornerShape(18.dp),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                            shape = RoundedCornerShape(18.dp), elevation = CardDefaults.cardElevation(3.dp)
                         ) {
-                            Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text("Программа (ID: ${prog.macrocycleId})", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                    Text("Неделя: ${prog.weekNumber}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                    Text("Программа", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                    Text("Неделя ${prog.weekNumber} из ${prog.totalWeeks}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
                                 }
-                                Icon(Icons.Default.Delete, contentDescription = "Удалить", tint = Color.Red.copy(alpha = 0.4f))
+                                Spacer(modifier = Modifier.height(8.dp))
+                                LinearProgressIndicator(progress = { prog.weekNumber.toFloat() / prog.totalWeeks }, modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.primary)
                             }
                         }
                     }
