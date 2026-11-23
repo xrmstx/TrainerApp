@@ -30,8 +30,8 @@ data class Workout(
 data class ExerciseBlock(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val workoutId: Long,
-    val section: String = "MAIN", // WARMUP, MAIN, COOLDOWN
-    val blockType: String = "SINGLE" // SINGLE, CIRCUIT
+    val section: String = "MAIN",
+    val blockType: String = "SINGLE"
 )
 
 @Entity(tableName = "template_exercises")
@@ -40,11 +40,11 @@ data class TemplateExercise(
     val blockId: Long,
     val exerciseName: String,
     val order: Int,
-    val targetSets: Int, // 0 для меткона
-    val targetReps: String, // Для меткона тут может быть дистанция/время
+    val targetSets: Int,
+    val targetReps: String,
     val targetWeight: Double?,
     val note: String? = null,
-    val metricType: String = "REPS" // REPS, WEIGHT, TIME, DISTANCE, CALORIES
+    val metricType: String = "REPS"
 )
 
 @Entity(tableName = "client_programs")
@@ -53,7 +53,7 @@ data class ClientProgram(
     val clientId: Long,
     val macrocycleId: Long,
     val weekNumber: Int,
-    val totalWeeks: Int, // Для прогресс-бара
+    val totalWeeks: Int,
     val status: String = "PLANNED"
 )
 
@@ -85,10 +85,10 @@ data class ClientExercise(
 data class ExerciseLog(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val clientExerciseId: Long,
-    val setNumber: Int, // Для меткона номер раунда
+    val setNumber: Int,
     val actualReps: Int,
     val actualWeight: Double,
-    val resultText: String? = null, // Для меткона (например "Сделано 5 раундов за 12 мин")
+    val resultText: String? = null,
     val note: String? = null,
     val date: Long = System.currentTimeMillis()
 )
