@@ -21,9 +21,12 @@ interface AppDao {
     @Insert
     suspend fun insertWorkout(workout: Workout): Long
 
-    // Синхронные методы для копирования
+    // --- СИНХРОННЫЕ МЕТОДЫ (нужны для копирования) ---
     @Query("SELECT * FROM workouts WHERE mesocycleId = :macroId ORDER BY dayNumber ASC")
     suspend fun getWorkoutsForMacroSync(macroId: Long): List<Workout>
+
+    @Query("SELECT * FROM exercise_blocks WHERE workoutId = :workoutId")
+    suspend fun getBlocksForWorkoutSync(workoutId: Long): List<ExerciseBlock>
 
     @Query("SELECT * FROM exercise_blocks WHERE workoutId = :workoutId LIMIT 1")
     suspend fun getBlockForWorkout(workoutId: Long): ExerciseBlock?
