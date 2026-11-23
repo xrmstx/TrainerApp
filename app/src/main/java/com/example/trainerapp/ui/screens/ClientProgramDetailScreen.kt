@@ -5,8 +5,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -54,18 +56,24 @@ fun ClientProgramDetailScreen(programId: Long, onBackClick: () -> Unit, onWorkou
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)) {
             if (workouts.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Нет тренировок в этой программе.", style = MaterialTheme.typography.bodyLarge)
+                    Text("Нет тренировок в этой программе.", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f))
                 }
             } else {
                 LazyColumn {
                     items(workouts) { workout ->
                         Card(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { onWorkoutClick(workout.id, workout.name) },
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
+                                .clickable { onWorkoutClick(workout.id, workout.name) },
+                            shape = RoundedCornerShape(16.dp),
                             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                         ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text("День ${workout.dayNumber}", style = MaterialTheme.typography.labelMedium)
-                                Text(workout.name, style = MaterialTheme.typography.titleMedium)
+                            Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.FitnessCenter, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Column {
+                                    Text("День ${workout.dayNumber}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary)
+                                    Text(workout.name, style = MaterialTheme.typography.titleMedium)
+                                }
                             }
                         }
                     }
