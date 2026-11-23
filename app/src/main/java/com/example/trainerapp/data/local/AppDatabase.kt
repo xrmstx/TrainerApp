@@ -12,7 +12,7 @@ import com.example.trainerapp.data.model.*
         TemplateExercise::class, ClientProgram::class, ClientWorkout::class, 
         ClientExercise::class, ExerciseLog::class
     ],
-    version = 4, // <-- ВОТ ЗДЕСЬ МЕНЯЕМ ВЕРСИЮ
+    version = 5, // <-- Версия 5
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -28,8 +28,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "fitness_database"
-                ).fallbackToDestructiveMigration() // Это очистит старую БД и создаст новую
-                .build()
+                ).fallbackToDestructiveMigration().build()
                 INSTANCE = instance
                 instance
             }
