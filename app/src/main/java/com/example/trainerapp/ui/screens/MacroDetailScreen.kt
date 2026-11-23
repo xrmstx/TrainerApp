@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
@@ -29,7 +30,6 @@ import kotlinx.coroutines.launch
 class MacroDetailViewModel(application: Application, val macroId: Long) : AndroidViewModel(application) {
     private val dao = AppDatabase.getDatabase(application).appDao()
     val workouts = dao.getWorkoutsForMacro(macroId)
-
     private val _showDialog = MutableStateFlow(false)
     val showDialog: StateFlow<Boolean> = _showDialog.asStateFlow()
     private val _workoutName = MutableStateFlow("")
@@ -61,10 +61,7 @@ class MacroDetailViewModelFactory(private val application: Application, private 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MacroDetailScreen(
-    macroId: Long, macroName: String,
-    onBackClick: () -> Unit, onWorkoutClick: (Long, String) -> Unit
-) {
+fun MacroDetailScreen(macroId: Long, macroName: String, onBackClick: () -> Unit, onWorkoutClick: (Long, String) -> Unit) {
     val context = LocalContext.current
     val application = context.applicationContext as Application
     val viewModel: MacroDetailViewModel = viewModel(factory = MacroDetailViewModelFactory(application, macroId))
@@ -77,7 +74,7 @@ fun MacroDetailScreen(
         AlertDialog(
             onDismissRequest = { viewModel.toggleDialog() },
             title = { Text("Новая тренировка") },
-            text = { OutlinedTextField(value = workoutName, onValueChange = { viewModel.onNameChange(it) }, label = { Text("Название (напр. Верх тела)") }) },
+            text = { OutlinedTextField(value = workoutName, onValueChange = { viewModel.onNameChange(it) }, label = { Text("Название (напр. Верх тела)") }, shape = RoundedCornerShape(12.dp)) },
             confirmButton = { TextButton(onClick = { viewModel.addWorkout(workouts.size) }) { Text("Добавить") } },
             dismissButton = { TextButton(onClick = { viewModel.toggleDialog() }) { Text("Отмена") } }
         )
@@ -91,24 +88,27 @@ fun MacroDetailScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { viewModel.toggleDialog() }) { Icon(Icons.Default.Add, contentDescription = "Добавить тренировку") }
+            FloatingActionButton(onClick = { viewModel.toggleDialog() }, containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary) { 
+                Icon(Icons.Default.Add, contentDescription = "Добавить тренировку") 
+            }
         }
     ) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)) {
             if (workouts.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Список тренировок пуст. Нажмите + чтобы добавить.")
+                    Text("Список тренировок пуст. Нажмите + чтобы добавить.", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f))
                 }
             } else {
                 LazyColumn {
                     items(workouts) { workout ->
                         Card(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
                                 .clickable { onWorkoutClick(workout.id, workout.name) },
+                            shape = RoundedCornerShape(16.dp),
                             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
-                                Text("День ${workout.dayNumber}", style = MaterialTheme.typography.labelMedium)
+                                Text("День ${workout.dayNumber}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary)
                                 Text(workout.name, style = MaterialTheme.typography.titleMedium)
                             }
                         }
