@@ -11,14 +11,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class TemplateViewModel(application: Application) : AndroidViewModel(application) {
-    private val db = AppDatabase.getDatabase(application)
-    private val dao = db.appDao()
-
+    private val dao = AppDatabase.getDatabase(application).appDao()
     val macrocycles = dao.getAllMacrocycles()
 
     private val _newMacroName = MutableStateFlow("")
     val newMacroName: StateFlow<String> = _newMacroName.asStateFlow()
-
     private val _newMacroWeeks = MutableStateFlow("")
     val newMacroWeeks: StateFlow<String> = _newMacroWeeks.asStateFlow()
 
