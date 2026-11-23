@@ -28,7 +28,6 @@ import kotlinx.coroutines.launch
 
 class ClientWorkoutLogViewModel(application: Application, workoutId: Long) : AndroidViewModel(application) {
     private val dao = AppDatabase.getDatabase(application).appDao()
-
     val exercises = dao.getClientExercises(workoutId)
 
     private val _historyDialog = MutableStateFlow<Pair<String, List<ExerciseLog>>?>(null)
@@ -51,21 +50,15 @@ class ClientWorkoutLogViewModel(application: Application, workoutId: Long) : And
         val s = sets.toIntOrNull() ?: 0
         val r = reps.toIntOrNull() ?: 0
         val w = weight.toDoubleOrNull() ?: 0.0
-
         if (s > 0 && r > 0) {
             viewModelScope.launch {
-                dao.insertExerciseLog(
-                    ExerciseLog(clientExerciseId = exerciseId, actualSets = s, actualReps = r, actualWeight = w)
-                )
+                dao.insertExerciseLog(ExerciseLog(clientExerciseId = exerciseId, actualSets = s, actualReps = r, actualWeight = w))
             }
         }
     }
 }
 
-class ClientWorkoutLogViewModelFactory(
-    private val application: Application,
-    private val workoutId: Long
-) : ViewModelProvider.Factory {
+class ClientWorkoutLogViewModelFactory(private val application: Application, private val workoutId: Long) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(ClientWorkoutLogViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
@@ -77,11 +70,7 @@ class ClientWorkoutLogViewModelFactory(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ClientWorkoutLogScreen(
-    workoutId: Long,
-    workoutName: String,
-    onBackClick: () -> Unit
-) {
+fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: () -> Unit) {
     val context = LocalContext.current
     val application = context.applicationContext as Application
     val viewModel: ClientWorkoutLogViewModel = viewModel(factory = ClientWorkoutLogViewModelFactory(application, workoutId))
@@ -115,7 +104,9 @@ fun ClientWorkoutLogScreen(
     ) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)) {
             if (exercises.isEmpty()) {
-                Text("В этой тренировке нет упражнений.", modifier = Modifier.align(Alignment.CenterHorizontally))
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("В этой тренировке нет упражнений.")
+                }
             } else {
                 LazyColumn {
                     items(exercises) { ex ->
@@ -123,11 +114,13 @@ fun ClientWorkoutLogScreen(
                         var reps by remember { mutableStateOf(ex.targetReps) }
                         var weight by remember { mutableStateOf("") }
 
-                        Card(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                        ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(ex.exerciseName, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                                    // Заменили иконку на текстовую кнопку
                                     TextButton(onClick = { viewModel.showHistory(ex.exerciseName, ex.id) }) {
                                         Text("История")
                                     }
@@ -143,10 +136,7 @@ fun ClientWorkoutLogScreen(
                                 }
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Button(
-                                    onClick = { 
-                                        viewModel.saveLog(ex.id, sets, reps, weight) 
-                                        weight = ""
-                                    },
+                                    onClick = { viewModel.saveLog(ex.id, sets, reps, weight); weight = "" },
                                     modifier = Modifier.align(Alignment.End)
                                 ) {
                                     Text("Сохранить")
