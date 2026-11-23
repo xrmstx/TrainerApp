@@ -4,6 +4,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -36,20 +38,29 @@ fun ClientScreen(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Button(onClick = { viewModel.addClient() }) {
-                    Text("Добавить")
+                    Icon(Icons.Default.Add, contentDescription = "Добавить")
                 }
             }
+
             Spacer(modifier = Modifier.height(16.dp))
+
             if (clients.isEmpty()) {
-                Text("Список пуст. Добавьте первого клиента!", modifier = Modifier.align(Alignment.CenterHorizontally))
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Список пуст. Добавьте первого клиента!", style = MaterialTheme.typography.bodyLarge)
+                }
             } else {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
                     items(clients) { client ->
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-                                .clickable { onClientClick(client.id, client.name) }
+                                .clickable { onClientClick(client.id, client.name) },
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                         ) {
-                            Text(client.name, modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                text = client.name,
+                                modifier = Modifier.padding(16.dp),
+                                style = MaterialTheme.typography.titleMedium
+                            )
                         }
                     }
                 }
