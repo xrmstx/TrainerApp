@@ -1,7 +1,6 @@
 package com.example.trainerapp.ui.screens
 
 import android.app.Application
-import android.content.Intent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -114,7 +113,7 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
                             note = note.ifEmpty { null }
                         )
                     )
-                    loadExercises() // Обновляем список
+                    loadExercises()
                 }
                 toggleDialog()
             }
