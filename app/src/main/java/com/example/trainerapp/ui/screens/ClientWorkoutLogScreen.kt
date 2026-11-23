@@ -7,7 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.History // <-- Добавлен импорт
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,7 +21,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.trainerapp.data.local.AppDatabase
-import com.example.trainerapp.data.model.ClientExercise
 import com.example.trainerapp.data.model.ExerciseLog
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -38,7 +37,6 @@ class ClientWorkoutLogViewModel(application: Application, workoutId: Long) : And
 
     fun showHistory(exerciseName: String, exerciseId: Long) {
         viewModelScope.launch {
-            // Для простоты берем логи по ID упражнения
             val logs = mutableListOf<ExerciseLog>()
             dao.getLogsForExercise(exerciseId).collect { 
                 logs.clear()
