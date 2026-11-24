@@ -47,6 +47,9 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
     private val _newBlockTitle = MutableStateFlow("")
     val newBlockTitle: StateFlow<String> = _newBlockTitle.asStateFlow()
 
+    private val _blockError = MutableStateFlow<String?>(null)
+    val blockError: StateFlow<String?> = _blockError.asStateFlow()
+
     private val _showExerciseDialog = MutableStateFlow(false)
     val showExerciseDialog: StateFlow<Boolean> = _showExerciseDialog.asStateFlow()
     private val _currentBlockId = MutableStateFlow<Long?>(null)
@@ -86,21 +89,31 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
     fun closeBlockDialog() { _showBlockDialog.value = false }
     fun onBlockTitleChange(title: String) { _newBlockTitle.value = title }
 
+    fun clearBlockError() { _blockError.value = null }
+
     fun addBlock() {
         val title = _newBlockTitle.value.trim()
         if (title.isEmpty()) return
         viewModelScope.launch {
-            val order = (dao.getMaxBlockOrder(workoutId) ?: 0) + 1
-            dao.insertExerciseBlock(ExerciseBlock(workoutId = workoutId, blockTitle = title, order = order))
-            loadBlocks()
-            closeBlockDialog()
+            try {
+                val order = (dao.getMaxBlockOrder(workoutId) ?: 0) + 1
+                dao.insertExerciseBlock(ExerciseBlock(workoutId = workoutId, blockTitle = title, order = order))
+                loadBlocks()
+                closeBlockDialog()
+            } catch (e: Exception) {
+                _blockError.value = e.message ?: e.toString()
+            }
         }
     }
 
     fun deleteBlock(blockId: Long) {
         viewModelScope.launch {
-            dao.deleteExerciseBlock(blockId) // каскад удалит и упражнения блока
-            loadBlocks()
+            try {
+                dao.deleteExerciseBlock(blockId) // каскад удалит и упражнения блока
+                loadBlocks()
+            } catch (e: Exception) {
+                _blockError.value = e.message ?: e.toString()
+            }
         }
     }
 
@@ -157,38 +170,49 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
         if (!isCircuit && sets <= 0) return
 
         viewModelScope.launch {
-            if (existing != null) {
-                dao.updateTemplateExercise(
-                    existing.copy(
-                        exerciseName = name,
-                        targetSets = sets,
-                        targetReps = reps,
-                        note = note.ifEmpty { null },
-                        metricType = metric
+            try {
+                if (existing != null) {
+                    dao.updateTemplateExercise(
+                        existing.copy(
+                            exerciseName = name,
+                            targetSets = sets,
+                            targetReps = reps,
+                            note = note.ifEmpty { null },
+                            metricType = metric
+                        )
                     )
-                )
-            } else {
-                val order = (dao.getMaxExerciseOrder(blockId) ?: 0) + 1
-                dao.insertTemplateExercise(
-                    TemplateExercise(
-                        blockId = blockId,
-                        exerciseName = name,
-                        order = order,
-                        targetSets = sets,
-                        targetReps = reps,
-                        targetWeight = null,
-                        note = note.ifEmpty { null },
-                        metricType = metric
+                } else {
+                    val order = (dao.getMaxExerciseOrder(blockId) ?: 0) + 1
+                    dao.insertTemplateExercise(
+                        TemplateExercise(
+                            blockId = blockId,
+                            exerciseName = name,
+                            order = order,
+                            targetSets = sets,
+                            targetReps = reps,
+                            targetWeight = null,
+                            note = note.ifEmpty { null },
+                            metricType = metric
+                        )
                     )
-                )
+                }
+                loadBlocks()
+                closeExerciseDialog()
+            } catch (e: Exception) {
+                _blockError.value = e.message ?: e.toString()
             }
-            loadBlocks()
-            closeExerciseDialog()
         }
     }
 
     fun deleteExercise(ex: TemplateExercise) {
-        viewModelScope.launch { dao.deleteTemplateExercise(ex.id); loadBlocks() }
+        viewModelScope.launch {
+            try {
+                dao.deleteTemplateExercise(ex.id)
+                loadBlocks()
+            } catch (e: Exception) {
+                _blockError.value = e.message ?: e.toString()
+            }
+        }
     }
 }
 
@@ -225,8 +249,18 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
     val exType by viewModel.exType.collectAsState()
     val showLibrary by viewModel.showLibrary.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
+    val blockError by viewModel.blockError.collectAsState()
 
     var blockToDelete by remember { mutableStateOf<ExerciseBlock?>(null) }
+
+    blockError?.let { message ->
+        AlertDialog(
+            onDismissRequest = { viewModel.clearBlockError() },
+            title = { Text("Ошибка") },
+            text = { Text(message) },
+            confirmButton = { TextButton(onClick = { viewModel.clearBlockError() }) { Text("Понятно") } }
+        )
+    }
 
     if (blockToDelete != null) {
         AlertDialog(
