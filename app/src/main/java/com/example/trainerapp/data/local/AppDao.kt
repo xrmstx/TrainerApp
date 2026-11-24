@@ -163,5 +163,8 @@ interface AppDao {
     ORDER BY c.name, cw.dayNumber
 """)
 suspend fun getTodayWorkoutsSync(): List<TodayWorkout>
+    @Query("SELECT COUNT(*) FROM clients")
+suspend fun getClientsCountSync(): Int
+
 
 }
