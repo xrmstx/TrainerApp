@@ -217,3 +217,208 @@ fun ClientDetailScreen(
                         label = { Text("Цель") },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(
+    if (showEditDialog && client != null) {
+        var goal by remember(client.id) { mutableStateOf(client.goal ?: "") }
+        var notes by remember(client.id) { mutableStateOf(client.notes ?: "") }
+
+        AlertDialog(
+            onDismissRequest = { viewModel.toggleEditDialog() },
+            title = { Text("Редактировать профиль") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = goal,
+                        onValueChange = { goal = it },
+                        label = { Text("Цель") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = notes,
+                        onValueChange = { notes = it },
+                        label = { Text("Заметки") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.updateClient(goal, notes) }) { Text("Сохранить") }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.toggleEditDialog() }) { Text("Отмена") }
+            }
+        )
+    }
+
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { viewModel.closeDialog() },
+            title = { Text("Выберите шаблон") },
+            text = {
+                if (templates.isEmpty()) {
+                    Text("У вас нет созданных шаблонов.")
+                } else {
+                    LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
+                        items(templates, key = { it.id }) { macro ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                                    .combinedClickable(onClick = { viewModel.assignProgram(macro) }),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text(
+                                    text = "${macro.name} · ${macro.durationWeeks} нед.",
+                                    modifier = Modifier.padding(16.dp),
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { viewModel.closeDialog() }) { Text("Отмена") } }
+        )
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(text = client?.name ?: "Профиль", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, contentDescription = "Назад") }
+                },
+                actions = {
+                    if (client != null) {
+                        IconButton(onClick = { viewModel.toggleEditDialog() }) {
+                            Icon(Icons.Default.Edit, contentDescription = "Редактировать")
+                        }
+                        IconButton(onClick = { confirmDeleteClient = true }) {
+                            Icon(Icons.Default.Delete, contentDescription = "Удалить клиента")
+                        }
+                    }
+                }
+            )
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)
+        ) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                elevation = CardDefaults.cardElevation(3.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Цель: ${client?.goal ?: "Не задана"}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Заметки: ${client?.notes ?: "Нет заметок"}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Button(
+                onClick = { viewModel.openDialog() },
+                enabled = !isAssigning,
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                if (isAssigning) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                } else {
+                    Icon(Icons.Default.Add, contentDescription = null)
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(if (isAssigning) "Назначаю..." else "Назначить программу")
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            OutlinedButton(
+                onClick = onHistoryClick,
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(Icons.Default.List, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("История тренировок")
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Text(
+                text = "Активные программы:",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            if (programs.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "Нет назначенных программ",
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                    )
+                }
+            } else {
+                LazyColumn {
+                    items(programs, key = { it.id }) { program ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 6.dp)
+                                .combinedClickable(
+                                    onClick = { onProgramClick(program.id, program.name) },
+                                    onLongClick = { programToDelete = program }
+                                ),
+                            shape = RoundedCornerShape(18.dp),
+                            elevation = CardDefaults.cardElevation(3.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = program.name.ifEmpty { "Программа" },
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Text(
+                                        text = "Неделя ${program.weekNumber} из ${program.totalWeeks}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                LinearProgressIndicator(
+                                    progress = if (program.totalWeeks > 0) {
+                                        (program.weekNumber.toFloat() / program.totalWeeks).coerceIn(0f, 1f)
+                                    } else 0f,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
