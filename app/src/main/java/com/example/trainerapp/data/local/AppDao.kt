@@ -27,7 +27,6 @@ interface AppDao {
     @Insert
     suspend fun insertMacrocycle(macrocycle: Macrocycle): Long
 
-    // Каскад удалит workouts -> blocks -> exercises
     @Query("DELETE FROM macrocycles WHERE id = :macroId")
     suspend fun deleteMacrocycle(macroId: Long)
 
@@ -41,7 +40,6 @@ interface AppDao {
     @Insert
     suspend fun insertWorkout(workout: Workout): Long
 
-    // Каскад удалит блоки и упражнения этой тренировки
     @Query("DELETE FROM workouts WHERE id = :workoutId")
     suspend fun deleteWorkout(workoutId: Long)
 
@@ -58,7 +56,6 @@ interface AppDao {
     @Insert
     suspend fun insertExerciseBlock(block: ExerciseBlock): Long
 
-    // Каскад удалит упражнения блока
     @Query("DELETE FROM exercise_blocks WHERE id = :blockId")
     suspend fun deleteExerciseBlock(blockId: Long)
 
@@ -81,17 +78,16 @@ interface AppDao {
     @Query("SELECT MAX(`order`) FROM template_exercises WHERE blockId = :blockId")
     suspend fun getMaxExerciseOrder(blockId: Long): Int?
 
-    @Query("SELECT * FROM template_exercises GROUP BY exerciseName ORDER BY id DESC")
-    suspend fun getUniqueExercises(): List<TemplateExercise>
-
     // --- Программы клиента ---
     @Query("SELECT * FROM client_programs WHERE clientId = :clientId ORDER BY weekNumber ASC")
     fun getProgramsForClient(clientId: Long): Flow<List<ClientProgram>>
 
+    @Query("SELECT * FROM client_programs WHERE clientId = :clientId")
+    suspend fun getProgramsForClientSync(clientId: Long): List<ClientProgram>
+
     @Query("SELECT * FROM client_programs WHERE id = :programId")
     suspend fun getClientProgramSync(programId: Long): ClientProgram?
 
-    // Каскад удалит тренировки, упражнения и логи программы
     @Query("DELETE FROM client_programs WHERE id = :programId")
     suspend fun deleteClientProgram(programId: Long)
 
@@ -102,12 +98,24 @@ interface AppDao {
     @Query("SELECT * FROM client_workouts WHERE clientProgramId = :programId ORDER BY dayNumber ASC")
     fun getClientWorkoutsForProgram(programId: Long): Flow<List<ClientWorkout>>
 
+    @Query("SELECT * FROM client_workouts WHERE clientProgramId = :programId ORDER BY dayNumber ASC")
+    suspend fun getClientWorkoutsForProgramSync(programId: Long): List<ClientWorkout>
+
+    @Query("SELECT * FROM client_workouts WHERE id = :workoutId")
+    suspend fun getClientWorkoutSync(workoutId: Long): ClientWorkout?
+
     @Insert
     suspend fun insertClientWorkout(workout: ClientWorkout): Long
+
+    @Query("UPDATE client_workouts SET status = :status WHERE id = :workoutId")
+    suspend fun setClientWorkoutStatus(workoutId: Long, status: String)
 
     // --- Упражнения клиента ---
     @Query("SELECT * FROM client_exercises WHERE clientWorkoutId = :workoutId ORDER BY blockOrder ASC, `order` ASC, id ASC")
     fun getClientExercises(workoutId: Long): Flow<List<ClientExercise>>
+
+    @Query("SELECT * FROM client_exercises WHERE clientWorkoutId = :workoutId ORDER BY blockOrder ASC, `order` ASC, id ASC")
+    suspend fun getClientExercisesSync(workoutId: Long): List<ClientExercise>
 
     @Insert
     suspend fun insertClientExercise(exercise: ClientExercise): Long
@@ -116,7 +124,7 @@ interface AppDao {
     @Query("SELECT * FROM exercise_logs WHERE clientExerciseId = :clientExerciseId ORDER BY date DESC, setNumber ASC LIMIT 1")
     suspend fun getLastLogForExercise(clientExerciseId: Long): ExerciseLog?
 
-    @Query("SELECT * FROM exercise_logs WHERE clientExerciseId = :clientExerciseId ORDER BY setNumber ASC")
+    @Query("SELECT * FROM exercise_logs WHERE clientExerciseId = :clientExerciseId ORDER BY setNumber ASC, date ASC")
     suspend fun getLogsForExerciseSync(clientExerciseId: Long): List<ExerciseLog>
 
     @Insert
