@@ -12,13 +12,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -73,7 +77,6 @@ class ClientWorkoutLogViewModel(application: Application, val workoutId: Long) :
 
     fun closeHistory() { _historyDialog.value = null }
 
-    // Пометить тренировку выполненной / вернуть в план
     fun toggleDone() {
         viewModelScope.launch {
             val newStatus = if (_isDone.value) "PLANNED" else "DONE"
@@ -133,7 +136,15 @@ fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: ()
     val lastWeights by viewModel.lastWeights.collectAsState()
     val isDone by viewModel.isDone.collectAsState()
 
-    // История — только просмотр: никаких удалений по случайному касанию
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    fun showSavedSnackbar(setNum: Int, weightText: String) {
+        scope.launch {
+            snackbarHostState.showSnackbar("Записано: подход $setNum, $weightText кг")
+        }
+    }
+
     historyDialog?.let { (name, logs) ->
         AlertDialog(
             onDismissRequest = { viewModel.closeHistory() },
@@ -168,6 +179,7 @@ fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: ()
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(workoutName) },
@@ -212,6 +224,12 @@ fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: ()
                                 }
                             }
 
+                            val doneSets = (setNum.toIntOrNull() ?: 1) - 1
+                            val targetSets = ex.targetSets.coerceAtLeast(0)
+                            val progress = if (targetSets > 0) {
+                                (doneSets.toFloat() / targetSets).coerceIn(0f, 1f)
+                            } else 0f
+
                             Card(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                                 shape = RoundedCornerShape(16.dp),
@@ -246,15 +264,17 @@ fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: ()
                                                 label = { Text("Подх.") },
                                                 modifier = Modifier.weight(0.5f),
                                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                                shape = RoundedCornerShape(12.dp)
+                                                shape = RoundedCornerShape(12.dp),
+                                                textStyle = LocalTextStyle.current.copy(fontSize = 20.sp)
                                             )
                                             OutlinedTextField(
                                                 value = weight,
                                                 onValueChange = { weight = it },
                                                 label = { Text("Вес") },
-                                                modifier = Modifier.weight(1f),
+                                                modifier = Modifier.weight(1.2f),
                                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                                shape = RoundedCornerShape(12.dp)
+                                                shape = RoundedCornerShape(12.dp),
+                                                textStyle = LocalTextStyle.current.copy(fontSize = 20.sp)
                                             )
                                             OutlinedTextField(
                                                 value = reps,
@@ -266,11 +286,68 @@ fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: ()
                                                 modifier = Modifier.weight(0.8f),
                                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                                 shape = RoundedCornerShape(12.dp),
+                                                textStyle = LocalTextStyle.current.copy(fontSize = 20.sp),
                                                 isError = showError,
                                                 supportingText = { if (showError) Text("Укажите повторы") }
                                             )
                                         }
+
+                                        Spacer(modifier = Modifier.height(8.dp))
+
+                                        // Шаговые кнопки веса: крупное касание вместо клавиатуры
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            OutlinedButton(
+                                                onClick = {
+                                                    val w = weight.trim().replace(',', '.').toDoubleOrNull() ?: ex.targetWeight ?: 0.0
+                                                    weight = formatWeight((w - 2.5).coerceAtLeast(0.0))
+                                                },
+                                                shape = RoundedCornerShape(12.dp),
+                                                modifier = Modifier.height(44.dp)
+                                            ) {
+                                                Icon(Icons.Default.Remove, contentDescription = "Минус 2.5 кг", modifier = Modifier.size(20.dp))
+                                                Text("2.5", modifier = Modifier.padding(start = 2.dp))
+                                            }
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = if (weight.isBlank()) "—" else weight.trim(),
+                                                style = MaterialTheme.typography.titleLarge,
+                                                textAlign = TextAlign.Center,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            OutlinedButton(
+                                                onClick = {
+                                                    val w = weight.trim().replace(',', '.').toDoubleOrNull() ?: ex.targetWeight ?: 0.0
+                                                    weight = formatWeight((w + 2.5).coerceAtMost(500.0))
+                                                },
+                                                shape = RoundedCornerShape(12.dp),
+                                                modifier = Modifier.height(44.dp)
+                                            ) {
+                                                Icon(Icons.Default.Add, contentDescription = "Плюс 2.5 кг", modifier = Modifier.size(20.dp))
+                                                Text("2.5", modifier = Modifier.padding(start = 2.dp))
+                                            }
+                                        }
                                     }
+
+                                    if (!isCircuit && targetSets > 0 && doneSets > 0) {
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            LinearProgressIndicator(
+                                                progress = progress,
+                                                modifier = Modifier.weight(1f),
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                "$doneSets из $targetSets",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    }
+
                                     Spacer(modifier = Modifier.height(8.dp))
                                     OutlinedTextField(
                                         value = note,
@@ -279,7 +356,7 @@ fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: ()
                                         modifier = Modifier.fillMaxWidth(),
                                         shape = RoundedCornerShape(12.dp)
                                     )
-                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Spacer(modifier = Modifier.height(12.dp))
                                     Button(
                                         onClick = {
                                             val r = reps.toIntOrNull() ?: 0
@@ -287,15 +364,23 @@ fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: ()
                                                 showError = true
                                                 return@Button
                                             }
+                                            val s = setNum.toIntOrNull() ?: 1
                                             viewModel.saveLog(ex.id, setNum, reps, weight, note, isCircuit)
-                                            setNum = (setNum.toIntOrNull()?.plus(1) ?: 2).toString()
-                                            weight = ""
+                                            if (!isCircuit) {
+                                                showSavedSnackbar(s, weight.trim().ifEmpty { "0" })
+                                                setNum = (s + 1).toString()
+                                                weight = ""
+                                            } else {
+                                                showSavedSnackbar(s, reps.trim())
+                                                reps = ""
+                                            }
                                             note = ""
-                                            if (isCircuit) reps = ""
                                         },
-                                        modifier = Modifier.align(Alignment.End),
-                                        shape = RoundedCornerShape(12.dp)
-                                    ) { Text("Записать") }
+                                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                                        shape = RoundedCornerShape(14.dp)
+                                    ) {
+                                        Text("Записать", fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                                    }
                                 }
                             }
                         }
