@@ -102,12 +102,15 @@ fun MainScreen() {
                 )
             }
             composable("templates") {
-                TemplateScreen(
-                    onTemplateClick = { templateId, templateName ->
-                        navController.navigate("workout_detail/$templateId/${URLEncoder.encode(templateName, "UTF-8")}")
-                    }
-                )
-            }
+    TemplateScreen(
+        onMacroClick = { templateId, templateName ->
+            navController.navigate("workout_detail/$templateId/${URLEncoder.encode(templateName, "UTF-8")}")
+        }
+    )
+}
+
+
+
             composable("client/{clientId}") { entry ->
                 val clientId = entry.arguments?.getString("clientId")?.toLongOrNull()
                     ?: return@composable
