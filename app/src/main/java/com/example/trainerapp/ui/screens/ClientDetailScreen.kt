@@ -122,7 +122,7 @@ class ClientDetailViewModel(
                                 clientWorkoutId = newWorkoutId,
                                 exerciseName = exercise.exerciseName,
                                 order = exercise.order,
-                                section = block.section,
+                                blockTitle = block.blockTitle, // <-- ИСПРАВЛЕНО: blockTitle вместо section
                                 blockType = block.blockType,
                                 targetSets = exercise.targetSets,
                                 targetReps = exercise.targetReps,
@@ -394,12 +394,14 @@ fun ClientDetailScreen(
 
                                 Spacer(modifier = Modifier.height(8.dp))
 
+                                // Исправленный прогресс-бар для Material3
                                 LinearProgressIndicator(
-                                    progress = if (program.totalWeeks > 0) {
-                                        (program.weekNumber.toFloat() / program.totalWeeks)
-                                            .coerceIn(0f, 1f)
-                                    } else {
-                                        0f
+                                    progress = { 
+                                        if (program.totalWeeks > 0) {
+                                            (program.weekNumber.toFloat() / program.totalWeeks).coerceIn(0f, 1f)
+                                        } else {
+                                            0f
+                                        }
                                     },
                                     modifier = Modifier.fillMaxWidth(),
                                     color = MaterialTheme.colorScheme.primary
