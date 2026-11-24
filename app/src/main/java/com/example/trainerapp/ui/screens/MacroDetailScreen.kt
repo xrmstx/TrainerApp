@@ -34,32 +34,58 @@ import kotlinx.coroutines.launch
 class MacroDetailViewModel(application: Application, val macroId: Long) : AndroidViewModel(application) {
     private val dao = AppDatabase.getDatabase(application).appDao()
     val workouts = dao.getWorkoutsForMacro(macroId)
+
     private val _showDialog = MutableStateFlow(false)
     val showDialog: StateFlow<Boolean> = _showDialog.asStateFlow()
     private val _workoutName = MutableStateFlow("")
     val workoutName: StateFlow<String> = _workoutName.asStateFlow()
 
     fun onNameChange(name: String) { _workoutName.value = name }
-    fun toggleDialog() { _showDialog.value = !_showDialog.value; _workoutName.value = "" }
+    fun openDialog() { _showDialog.value = true; _workoutName.value = "" }
+    fun closeDialog() { _showDialog.value = false; _workoutName.value = "" }
 
-    fun addWorkout(currentCount: Int) {
+    fun addWorkout() {
         val name = _workoutName.value.trim()
-        if (name.isNotEmpty()) {
-            viewModelScope.launch {
-                dao.insertWorkout(Workout(mesocycleId = macroId, dayNumber = currentCount + 1, name = name))
-                toggleDialog()
-            }
+        if (name.isEmpty()) return
+        viewModelScope.launch {
+            val maxDay = dao.getMaxDayNumber(macroId) ?: 0
+            dao.insertWorkout(Workout(mesocycleId = macroId, dayNumber = maxDay + 1, name = name))
+            closeDialog()
         }
     }
 
     fun deleteWorkout(id: Long) {
-        viewModelScope.launch { dao.deleteWorkout(id) }
+        viewModelScope.launch { dao.deleteWorkout(id) } // каскад удалит блоки и упражнения
+    }
+
+    fun shareProgram(macroName: String, onReady: (String) -> Unit) {
+        viewModelScope.launch {
+            val text = buildString {
+                appendLine("🏋️ Программа: $macroName")
+                appendLine()
+                dao.getWorkoutsForMacroSync(macroId).forEach { workout ->
+                    appendLine("📅 День ${workout.dayNumber}: ${workout.name}")
+                    dao.getBlocksForWorkoutSync(workout.id).forEach { block ->
+                        appendLine("  ${block.blockTitle}:")
+                        dao.getExercisesForBlockSync(block.id).forEach { ex ->
+                            val plan = if (ex.targetSets == 0) ex.targetReps else "${ex.targetSets}×${ex.targetReps}"
+                            appendLine("    • ${ex.exerciseName} — $plan")
+                        }
+                    }
+                    appendLine()
+                }
+                appendLine("💪 Успехов в тренировках!")
+            }
+            onReady(text)
+        }
     }
 }
 
 class MacroDetailViewModelFactory(private val application: Application, private val macroId: Long) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(MacroDetailViewModel::class.java)) { @Suppress("UNCHECKED_CAST") return MacroDetailViewModel(application, macroId) as T }
+        if (modelClass.isAssignableFrom(MacroDetailViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST") return MacroDetailViewModel(application, macroId) as T
+        }
         throw IllegalArgumentException("Unknown ViewModel class")
     }
 }
@@ -74,32 +100,38 @@ fun MacroDetailScreen(macroId: Long, macroName: String, onBackClick: () -> Unit,
     val showDialog by viewModel.showDialog.collectAsState()
     val workoutName by viewModel.workoutName.collectAsState()
 
-    // Функция шаринга всей программы (собираем все дни)
-    fun shareProgram() {
-        val text = buildString {
-            appendLine("🏋️ Программа: $macroName")
-            appendLine("")
-            workouts.forEach { workout ->
-                appendLine("📅 День ${workout.dayNumber}: ${workout.name}")
-                appendLine("")
-            }
-            appendLine("💪 Успехов в тренировках!")
-        }
-        val sendIntent = Intent().apply {
-            action = Intent.ACTION_SEND
-            putExtra(Intent.EXTRA_TEXT, text)
-            type = "text/plain"
-        }
-        context.startActivity(Intent.createChooser(sendIntent, "Поделиться программой"))
+    var workoutToDelete by remember { mutableStateOf<Workout?>(null) }
+
+    if (workoutToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { workoutToDelete = null },
+            title = { Text("Удалить тренировку?") },
+            text = { Text("«${workoutToDelete!!.name}» и все её блоки и упражнения будут удалены безвозвратно.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteWorkout(workoutToDelete!!.id)
+                    workoutToDelete = null
+                }) { Text("Удалить", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { workoutToDelete = null }) { Text("Отмена") } }
+        )
     }
 
     if (showDialog) {
         AlertDialog(
-            onDismissRequest = { viewModel.toggleDialog() },
+            onDismissRequest = { viewModel.closeDialog() },
             title = { Text("Новая тренировка") },
-            text = { OutlinedTextField(value = workoutName, onValueChange = { viewModel.onNameChange(it) }, label = { Text("Название") }, shape = RoundedCornerShape(12.dp)) },
-            confirmButton = { TextButton(onClick = { viewModel.addWorkout(workouts.size) }) { Text("Добавить") } },
-            dismissButton = { TextButton(onClick = { viewModel.toggleDialog() }) { Text("Отмена") } }
+            text = {
+                OutlinedTextField(
+                    value = workoutName,
+                    onValueChange = { viewModel.onNameChange(it) },
+                    label = { Text("Название") },
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true
+                )
+            },
+            confirmButton = { TextButton(onClick = { viewModel.addWorkout() }) { Text("Добавить") } },
+            dismissButton = { TextButton(onClick = { viewModel.closeDialog() }) { Text("Отмена") } }
         )
     }
 
@@ -108,23 +140,35 @@ fun MacroDetailScreen(macroId: Long, macroName: String, onBackClick: () -> Unit,
             TopAppBar(
                 title = { Text(macroName, fontWeight = FontWeight.Bold) },
                 navigationIcon = { IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, contentDescription = "Назад") } },
-                actions = { IconButton(onClick = { shareProgram() }) { Icon(Icons.Default.Share, contentDescription = "Поделиться") } }
+                actions = {
+                    IconButton(onClick = { viewModel.shareProgram(macroName) { text ->
+                        val sendIntent = Intent().apply {
+                            action = Intent.ACTION_SEND
+                            putExtra(Intent.EXTRA_TEXT, text)
+                            type = "text/plain"
+                        }
+                        context.startActivity(Intent.createChooser(sendIntent, "Поделиться программой"))
+                    } }) { Icon(Icons.Default.Share, contentDescription = "Поделиться") }
+                }
             )
         },
-        floatingActionButton = { FloatingActionButton(onClick = { viewModel.toggleDialog() }) { Icon(Icons.Default.Add, contentDescription = null) } }
+        floatingActionButton = { FloatingActionButton(onClick = { viewModel.openDialog() }) { Icon(Icons.Default.Add, contentDescription = null) } }
     ) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)) {
             if (workouts.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Список тренировок пуст.", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)) }
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Список тренировок пуст.", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f))
+                }
             } else {
                 LazyColumn {
-                    items(workouts) { workout ->
+                    items(workouts, key = { it.id }) { workout ->
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp).combinedClickable(
                                 onClick = { onWorkoutClick(workout.id, workout.name) },
-                                onLongClick = { viewModel.deleteWorkout(workout.id) }
+                                onLongClick = { workoutToDelete = workout }
                             ),
-                            shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(2.dp)
+                            shape = RoundedCornerShape(16.dp),
+                            elevation = CardDefaults.cardElevation(2.dp)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text("День ${workout.dayNumber}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
