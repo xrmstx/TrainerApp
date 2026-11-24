@@ -47,9 +47,8 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                val now = System.currentTimeMillis()
-                _todayWorkouts.value = dao.getTodayWorkoutsSync(now)
-                _clientsCount.value = dao.getAllClientsSync().size
+                _todayWorkouts.value = dao.getTodayWorkoutsSync()
+                _clientsCount.value = dao.getClientsCountSync()
             } finally {
                 _isLoading.value = false
             }
@@ -108,7 +107,7 @@ fun DashboardScreen(onWorkoutClick: (Long, String) -> Unit) {
                             color = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            if (workouts.size == 1) "тренировка сегодня" else "тренировок сегодня",
+                            if (workouts.size == 1) "тренировка в плане" else "тренировок в плане",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
@@ -147,13 +146,13 @@ fun DashboardScreen(onWorkoutClick: (Long, String) -> Unit) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                "На сегодня тренировок нет",
+                                "Тренировок в плане нет",
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                "Они появятся, когда активная программа\nкакого-нибудь клиента дойдёт до текущей недели.",
+                                "Назначьте программу клиенту —\nеё незакрытые дни появятся здесь.",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
                             )
@@ -176,9 +175,7 @@ fun DashboardScreen(onWorkoutClick: (Long, String) -> Unit) {
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Box(
-                                        modifier = Modifier
-                                            .size(12.dp)
-                                            .padding(0.dp),
+                                        modifier = Modifier.size(12.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Surface(
