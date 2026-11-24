@@ -1,6 +1,6 @@
 package com.example.trainerapp.ui.screens
 
-import com.example.trainerapp.ui.theme.*  // Добавляем эту строку
+import android.app.Application  // Добавляем эту строку
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -22,10 +22,12 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.trainerapp.data.local.AppDatabase
 import com.example.trainerapp.data.model.TodayWorkout
+import com.example.trainerapp.ui.theme.*  // Импорт цветов
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+
 
 
 class DashboardViewModel(application: Application) : AndroidViewModel(application) {
