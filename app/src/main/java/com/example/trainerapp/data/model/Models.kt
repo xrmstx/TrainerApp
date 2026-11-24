@@ -1,6 +1,8 @@
 package com.example.trainerapp.data.model
 
 import androidx.room.Entity
+import androidx.room.ForeignKey
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 @Entity(tableName = "clients")
@@ -18,7 +20,17 @@ data class Macrocycle(
     val durationWeeks: Int
 )
 
-@Entity(tableName = "workouts")
+// Поле исторически называется mesocycleId, но хранит id макроцикла — не переименовываем, чтобы не ломать существующую базу
+@Entity(
+    tableName = "workouts",
+    foreignKeys = [ForeignKey(
+        entity = Macrocycle::class,
+        parentColumns = ["id"],
+        childColumns = ["mesocycleId"],
+        onDelete = ForeignKey.CASCADE
+    )],
+    indices = [Index("mesocycleId")]
+)
 data class Workout(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val mesocycleId: Long,
@@ -26,39 +38,77 @@ data class Workout(
     val name: String
 )
 
-// Блок теперь имеет название и тип
-@Entity(tableName = "exercise_blocks")
+@Entity(
+    tableName = "exercise_blocks",
+    foreignKeys = [ForeignKey(
+        entity = Workout::class,
+        parentColumns = ["id"],
+        childColumns = ["workoutId"],
+        onDelete = ForeignKey.CASCADE
+    )],
+    indices = [Index("workoutId")]
+)
 data class ExerciseBlock(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val workoutId: Long,
     val blockTitle: String, // "Разминка", "Скилл", "Силовая", "Меткон"
-    val blockType: String = "LINEAR" // LINEAR, CIRCUIT, TEXT
+    val blockType: String = "LINEAR", // LINEAR, CIRCUIT, TEXT
+    val order: Int = 0
 )
 
-@Entity(tableName = "template_exercises")
+@Entity(
+    tableName = "template_exercises",
+    foreignKeys = [ForeignKey(
+        entity = ExerciseBlock::class,
+        parentColumns = ["id"],
+        childColumns = ["blockId"],
+        onDelete = ForeignKey.CASCADE
+    )],
+    indices = [Index("blockId")]
+)
 data class TemplateExercise(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val blockId: Long,
     val exerciseName: String,
     val order: Int,
-    val targetSets: Int,
+    val targetSets: Int, // 0 = CIRCUIT
     val targetReps: String,
     val targetWeight: Double?,
     val note: String? = null,
     val metricType: String = "REPS" // REPS, WEIGHT, TIME, DISTANCE, CALORIES
 )
 
-@Entity(tableName = "client_programs")
+// Имя программы копируем при назначении: если шаблон удалят, программа останется с внятным названием
+@Entity(
+    tableName = "client_programs",
+    foreignKeys = [ForeignKey(
+        entity = Client::class,
+        parentColumns = ["id"],
+        childColumns = ["clientId"],
+        onDelete = ForeignKey.CASCADE
+    )],
+    indices = [Index("clientId")]
+)
 data class ClientProgram(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val clientId: Long,
-    val macrocycleId: Long,
+    val macrocycleId: Long, // без FK: удаление шаблона не должно трогать уже назначенные программы
+    val name: String = "",
     val weekNumber: Int,
     val totalWeeks: Int,
     val status: String = "PLANNED"
 )
 
-@Entity(tableName = "client_workouts")
+@Entity(
+    tableName = "client_workouts",
+    foreignKeys = [ForeignKey(
+        entity = ClientProgram::class,
+        parentColumns = ["id"],
+        childColumns = ["clientProgramId"],
+        onDelete = ForeignKey.CASCADE
+    )],
+    indices = [Index("clientProgramId")]
+)
 data class ClientWorkout(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val clientProgramId: Long,
@@ -68,7 +118,16 @@ data class ClientWorkout(
     val status: String = "PLANNED"
 )
 
-@Entity(tableName = "client_exercises")
+@Entity(
+    tableName = "client_exercises",
+    foreignKeys = [ForeignKey(
+        entity = ClientWorkout::class,
+        parentColumns = ["id"],
+        childColumns = ["clientWorkoutId"],
+        onDelete = ForeignKey.CASCADE
+    )],
+    indices = [Index("clientWorkoutId")]
+)
 data class ClientExercise(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val clientWorkoutId: Long,
@@ -76,13 +135,24 @@ data class ClientExercise(
     val order: Int,
     val blockTitle: String,
     val blockType: String,
+    val blockOrder: Int = 0,
     val targetSets: Int,
     val targetReps: String,
+    val targetWeight: Double? = null,
     val note: String? = null,
     val metricType: String = "REPS"
 )
 
-@Entity(tableName = "exercise_logs")
+@Entity(
+    tableName = "exercise_logs",
+    foreignKeys = [ForeignKey(
+        entity = ClientExercise::class,
+        parentColumns = ["id"],
+        childColumns = ["clientExerciseId"],
+        onDelete = ForeignKey.CASCADE
+    )],
+    indices = [Index("clientExerciseId")]
+)
 data class ExerciseLog(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val clientExerciseId: Long,
