@@ -163,3 +163,14 @@ data class ExerciseLog(
     val note: String? = null,
     val date: Long = System.currentTimeMillis()
 )
+package com.example.trainerapp.data.model
+
+data class TodayWorkout(
+    val workoutId: Long,
+    val workoutName: String,
+    val weekNumber: Int,
+    val dayNumber: Int,
+    val status: String,
+    val clientName: String,
+    val programId: Long
+)
