@@ -1,133 +1,167 @@
 package com.example.trainerapp
 
-import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material3.*
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.example.trainerapp.ui.screens.*
+import com.example.trainerapp.ui.screens.ClientDetailScreen
+import com.example.trainerapp.ui.screens.ClientHistoryScreen
+import com.example.trainerapp.ui.screens.ClientProgramDetailScreen
+import com.example.trainerapp.ui.screens.ClientScreen
+import com.example.trainerapp.ui.screens.ClientWorkoutLogScreen
+import com.example.trainerapp.ui.screens.DashboardScreen
+import com.example.trainerapp.ui.screens.TemplateScreen
+import com.example.trainerapp.ui.screens.WorkoutDetailScreen
 import com.example.trainerapp.ui.theme.TrainerAppTheme
+import java.net.URLEncoder
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             TrainerAppTheme {
-                val navController = rememberNavController()
-                val navBackStackEntry by navController.currentBackStackEntryAsState()
-                val currentRoute = navBackStackEntry?.destination?.route
+                MainScreen()
+            }
+        }
+    }
+}
 
-                Scaffold(
-                    bottomBar = {
-                        if (currentRoute == "clients" || currentRoute == "templates") {
-                            NavigationBar {
-                                NavigationBarItem(
-                                    icon = { Icon(Icons.Default.Person, contentDescription = null) },
-                                    label = { Text("Клиенты") },
-                                    selected = currentRoute == "clients",
-                                    onClick = {
-                                        navController.navigate("clients") {
-                                            popUpTo("clients") { inclusive = true }
-                                            launchSingleTop = true
-                                        }
-                                    }
-                                )
-                                NavigationBarItem(
-                                    icon = { Icon(Icons.Default.List, contentDescription = null) },
-                                    label = { Text("Шаблоны") },
-                                    selected = currentRoute == "templates",
-                                    onClick = {
-                                        navController.navigate("templates") {
-                                            popUpTo("clients") { inclusive = true }
-                                            launchSingleTop = true
-                                        }
-                                    }
-                                )
-                            }
-                        }
-                    }
-                ) { innerPadding ->
-                    NavHost(
-                        navController = navController,
-                        startDestination = "clients",
-                        modifier = Modifier.padding(innerPadding)
-                    ) {
-                        composable("clients") {
-                            ClientScreen(onClientClick = { id, _ -> navController.navigate("client_detail/$id") })
-                        }
-                        composable("client_detail/{clientId}") { backStackEntry ->
-                            val id = backStackEntry.arguments?.getString("clientId")?.toLongOrNull() ?: 0L
-                            ClientDetailScreen(
-                                clientId = id,
-                                onBackClick = { navController.popBackStack() },
-                                onProgramClick = { programId, programName ->
-                                    navController.navigate("client_program_detail/$programId/${Uri.encode(programName)}")
-                                },
-                                onHistoryClick = { navController.navigate("client_history/$id") }
-                            )
-                        }
-                        composable("client_program_detail/{programId}/{programName}") { backStackEntry ->
-                            val programId = backStackEntry.arguments?.getString("programId")?.toLongOrNull() ?: 0L
-                            val programName = backStackEntry.arguments?.getString("programName") ?: ""
-                            ClientProgramDetailScreen(
-                                programId = programId,
-                                onBackClick = { navController.popBackStack() },
-                                onWorkoutClick = { workoutId, workoutName ->
-                                    navController.navigate("client_workout_log/$workoutId/${Uri.encode(workoutName)}")
+private data class BottomItem(val route: String, val label: String, val icon: ImageVector)
+
+@Composable
+fun MainScreen() {
+    val navController: NavHostController = rememberNavController()
+
+    val bottomItems = listOf(
+        BottomItem("dashboard", "Сегодня", Icons.Default.Home),
+        BottomItem("clients", "Клиенты", Icons.Default.Person),
+        BottomItem("templates", "Шаблоны", Icons.Default.List)
+    )
+
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = backStackEntry?.destination?.route
+    val showBottomBar = bottomItems.any { it.route == currentRoute }
+
+    Scaffold(
+        bottomBar = {
+            if (showBottomBar) {
+                NavigationBar {
+                    bottomItems.forEach { item ->
+                        NavigationBarItem(
+                            selected = currentRoute == item.route,
+                            onClick = {
+                                navController.navigate(item.route) {
+                                    popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
                                 }
-                            )
-                        }
-                        composable("client_workout_log/{workoutId}/{workoutName}") { backStackEntry ->
-                            val workoutId = backStackEntry.arguments?.getString("workoutId")?.toLongOrNull() ?: 0L
-                            val workoutName = backStackEntry.arguments?.getString("workoutName") ?: ""
-                            ClientWorkoutLogScreen(
-                                workoutId = workoutId,
-                                workoutName = workoutName,
-                                onBackClick = { navController.popBackStack() }
-                            )
-                        }
-                        composable("client_history/{clientId}") { backStackEntry ->
-                            val id = backStackEntry.arguments?.getString("clientId")?.toLongOrNull() ?: 0L
-                            com.example.trainerapp.ui.screens.ClientHistoryScreen(clientId = id, onBackClick = { navController.popBackStack() })
-                        }
-                        composable("templates") {
-                            TemplateScreen(onMacroClick = { id, name ->
-                                navController.navigate("macro_detail/$id/${Uri.encode(name)}")
-                            })
-                        }
-                        composable("macro_detail/{macroId}/{macroName}") { backStackEntry ->
-                            val id = backStackEntry.arguments?.getString("macroId")?.toLongOrNull() ?: 0L
-                            val name = backStackEntry.arguments?.getString("macroName") ?: ""
-                            MacroDetailScreen(
-                                macroId = id,
-                                macroName = name,
-                                onBackClick = { navController.popBackStack() },
-                                onWorkoutClick = { workoutId, workoutName ->
-                                    navController.navigate("workout_detail/$workoutId/${Uri.encode(workoutName)}")
-                                }
-                            )
-                        }
-                        composable("workout_detail/{workoutId}/{workoutName}") { backStackEntry ->
-                            val id = backStackEntry.arguments?.getString("workoutId")?.toLongOrNull() ?: 0L
-                            val name = backStackEntry.arguments?.getString("workoutName") ?: ""
-                            WorkoutDetailScreen(
-                                workoutId = id,
-                                workoutName = name,
-                                onBackClick = { navController.popBackStack() }
-                            )
-                        }
+                            },
+                            icon = { Icon(item.icon, contentDescription = item.label) },
+                            label = { Text(item.label) }
+                        )
                     }
                 }
+            }
+        }
+    ) { paddingValues ->
+        NavHost(
+            navController = navController,
+            startDestination = "dashboard",
+            modifier = Modifier.padding(paddingValues)
+        ) {
+            composable("dashboard") {
+                DashboardScreen(
+                    onWorkoutClick = { workoutId, workoutName ->
+                        navController.navigate("workout_log/$workoutId/${URLEncoder.encode(workoutName, "UTF-8")}")
+                    }
+                )
+            }
+            composable("clients") {
+                ClientScreen(
+                    onClientClick = { clientId ->
+                        navController.navigate("client/$clientId")
+                    }
+                )
+            }
+            composable("templates") {
+                TemplateScreen(
+                    onTemplateClick = { templateId, templateName ->
+                        navController.navigate("workout_detail/$templateId/${URLEncoder.encode(templateName, "UTF-8")}")
+                    }
+                )
+            }
+            composable("client/{clientId}") { entry ->
+                val clientId = entry.arguments?.getString("clientId")?.toLongOrNull()
+                    ?: return@composable
+                ClientDetailScreen(
+                    clientId = clientId,
+                    onBackClick = { navController.popBackStack() },
+                    onProgramClick = { programId, programName ->
+                        navController.navigate("client_program/$programId/${URLEncoder.encode(programName, "UTF-8")}")
+                    },
+                    onHistoryClick = {
+                        navController.navigate("history/$clientId")
+                    }
+                )
+            }
+            composable("client_program/{programId}/{programName}") { entry ->
+                val programId = entry.arguments?.getString("programId")?.toLongOrNull()
+                    ?: return@composable
+                val programName = entry.arguments?.getString("programName") ?: ""
+                ClientProgramDetailScreen(
+                    programId = programId,
+                    programName = programName,
+                    onBackClick = { navController.popBackStack() },
+                    onWorkoutClick = { workoutId, workoutName ->
+                        navController.navigate("workout_log/$workoutId/${URLEncoder.encode(workoutName, "UTF-8")}")
+                    }
+                )
+            }
+            composable("workout_log/{workoutId}/{workoutName}") { entry ->
+                val workoutId = entry.arguments?.getString("workoutId")?.toLongOrNull()
+                    ?: return@composable
+                val workoutName = entry.arguments?.getString("workoutName") ?: ""
+                ClientWorkoutLogScreen(
+                    workoutId = workoutId,
+                    workoutName = workoutName,
+                    onBackClick = { navController.popBackStack() }
+                )
+            }
+            composable("workout_detail/{workoutId}/{workoutName}") { entry ->
+                val workoutId = entry.arguments?.getString("workoutId")?.toLongOrNull()
+                    ?: return@composable
+                val workoutName = entry.arguments?.getString("workoutName") ?: ""
+                WorkoutDetailScreen(
+                    workoutId = workoutId,
+                    workoutName = workoutName,
+                    onBackClick = { navController.popBackStack() }
+                )
+            }
+            composable("history/{clientId}") { entry ->
+                val clientId = entry.arguments?.getString("clientId")?.toLongOrNull()
+                    ?: return@composable
+                ClientHistoryScreen(
+                    clientId = clientId,
+                    onBackClick = { navController.popBackStack() }
+                )
             }
         }
     }
