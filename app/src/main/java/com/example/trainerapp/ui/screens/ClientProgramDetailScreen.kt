@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,17 +21,31 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.trainerapp.data.local.AppDatabase
+import com.example.trainerapp.data.model.ClientProgram
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 class ClientProgramDetailViewModel(application: Application, val programId: Long) : AndroidViewModel(application) {
     private val dao = AppDatabase.getDatabase(application).appDao()
     val workouts = dao.getClientWorkoutsForProgram(programId)
+
+    private val _program = MutableStateFlow<ClientProgram?>(null)
+    val program: StateFlow<ClientProgram?> = _program.asStateFlow()
+
+    init {
+        viewModelScope.launch { _program.value = dao.getClientProgramSync(programId) }
+    }
 }
 
-class ClientProgramDetailViewModelFactory(private val application: Application, private val programId: Long) : ViewModelProvider.Factory {
+class ClientProgramDetailViewModelFactory(
+    private val application: Application,
+    private val programId: Long
+) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(ClientProgramDetailViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
-            return ClientProgramDetailViewModel(application, programId) as T
+            @Suppress("UNCHECKED_CAST") return ClientProgramDetailViewModel(application, programId) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }
@@ -44,12 +59,22 @@ fun ClientProgramDetailScreen(programId: Long, onBackClick: () -> Unit, onWorkou
     val viewModel: ClientProgramDetailViewModel = viewModel(factory = ClientProgramDetailViewModelFactory(application, programId))
 
     val workouts by viewModel.workouts.collectAsState(initial = emptyList())
+    val program by viewModel.program.collectAsState()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Программа клиента", fontWeight = FontWeight.Bold) },
-                navigationIcon = { IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, contentDescription = "Назад") } }
+                title = {
+                    val p = program
+                    Text(
+                        text = if (p != null) "${p.name.ifEmpty { "Программа" }} · неделя ${p.weekNumber}/${p.totalWeeks}"
+                        else "Программа клиента",
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, contentDescription = "Назад") }
+                }
             )
         }
     ) { paddingValues ->
@@ -60,7 +85,7 @@ fun ClientProgramDetailScreen(programId: Long, onBackClick: () -> Unit, onWorkou
                 }
             } else {
                 LazyColumn {
-                    items(workouts) { workout ->
+                    items(workouts, key = { it.id }) { workout ->
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
                                 .clickable { onWorkoutClick(workout.id, workout.name) },
@@ -68,10 +93,27 @@ fun ClientProgramDetailScreen(programId: Long, onBackClick: () -> Unit, onWorkou
                             elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                         ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text("День ${workout.dayNumber}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(workout.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "День ${workout.dayNumber}",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(workout.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                }
+                                if (workout.status != "PLANNED") {
+                                    Icon(
+                                        Icons.Default.CheckCircle,
+                                        contentDescription = "Выполнено",
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
                             }
                         }
                     }
