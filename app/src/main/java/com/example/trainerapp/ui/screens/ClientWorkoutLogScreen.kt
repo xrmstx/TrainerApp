@@ -1,8 +1,6 @@
 package com.example.trainerapp.ui.screens
 
 import android.app.Application
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,6 +10,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,6 +29,7 @@ import com.example.trainerapp.data.model.ExerciseLog
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class ClientWorkoutLogViewModel(application: Application, val workoutId: Long) : AndroidViewModel(application) {
@@ -37,16 +38,19 @@ class ClientWorkoutLogViewModel(application: Application, val workoutId: Long) :
 
     private val _clientId = MutableStateFlow<Long?>(null)
 
-    // Данные для истории: имя упражнения + список логов
     private val _historyDialog = MutableStateFlow<Pair<String, List<ExerciseLog>>?>(null)
     val historyDialog: StateFlow<Pair<String, List<ExerciseLog>>?> = _historyDialog.asStateFlow()
 
     private val _lastWeights = MutableStateFlow<Map<Long, Double?>>(emptyMap())
     val lastWeights: StateFlow<Map<Long, Double?>> = _lastWeights.asStateFlow()
 
+    private val _isDone = MutableStateFlow(false)
+    val isDone: StateFlow<Boolean> = _isDone.asStateFlow()
+
     init {
         viewModelScope.launch {
             _clientId.value = dao.getClientIdForWorkoutSync(workoutId)
+            _isDone.value = dao.getClientWorkoutSync(workoutId)?.status != "PLANNED"
             val map = mutableMapOf<Long, Double?>()
             dao.getClientExercises(workoutId).first().forEach { ex ->
                 if (ex.blockType != "CIRCUIT") map[ex.id] = dao.getLastLogForExercise(ex.id)?.actualWeight
@@ -69,14 +73,12 @@ class ClientWorkoutLogViewModel(application: Application, val workoutId: Long) :
 
     fun closeHistory() { _historyDialog.value = null }
 
-    fun deleteLog(logId: Long, exerciseName: String) {
+    // Пометить тренировку выполненной / вернуть в план
+    fun toggleDone() {
         viewModelScope.launch {
-            dao.deleteLog(logId)
-            val clientId = _clientId.value
-            val fresh = if (clientId != null) {
-                dao.getHistoryForExercise(clientId, exerciseName)
-            } else emptyList()
-            _historyDialog.value = Pair(exerciseName, fresh)
+            val newStatus = if (_isDone.value) "PLANNED" else "DONE"
+            dao.setClientWorkoutStatus(workoutId, newStatus)
+            _isDone.value = newStatus != "PLANNED"
         }
     }
 
@@ -116,10 +118,10 @@ class ClientWorkoutLogViewModelFactory(
     }
 }
 
-private fun formatWeight(w: Double): String =
+fun formatWeight(w: Double): String =
     if (w == w.toLong().toDouble()) w.toLong().toString() else w.toString()
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: () -> Unit) {
     val context = LocalContext.current
@@ -129,7 +131,9 @@ fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: ()
     val exercises by viewModel.exercises.collectAsState(initial = emptyList())
     val historyDialog by viewModel.historyDialog.collectAsState()
     val lastWeights by viewModel.lastWeights.collectAsState()
+    val isDone by viewModel.isDone.collectAsState()
 
+    // История — только просмотр: никаких удалений по случайному касанию
     historyDialog?.let { (name, logs) ->
         AlertDialog(
             onDismissRequest = { viewModel.closeHistory() },
@@ -139,19 +143,18 @@ fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: ()
                 else LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
                     items(logs, key = { it.id }) { log ->
                         Card(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).combinedClickable(
-                                onClick = {},
-                                onLongClick = { viewModel.deleteLog(log.id, name) }
-                            ),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Column(modifier = Modifier.padding(8.dp)) {
                                 val dateText = java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.getDefault())
                                     .format(java.util.Date(log.date))
-                                Text(
-                                    "Подход ${log.setNumber}: ${formatWeight(log.actualWeight)} кг × ${log.actualReps} · $dateText",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
+                                val mainLine = if (log.resultText != null) {
+                                    "Меткон: ${log.resultText} · $dateText"
+                                } else {
+                                    "Подход ${log.setNumber}: ${formatWeight(log.actualWeight)} кг × ${log.actualReps} · $dateText"
+                                }
+                                Text(mainLine, style = MaterialTheme.typography.bodyMedium)
                                 if (!log.note.isNullOrBlank()) {
                                     Text(log.note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                                 }
@@ -170,6 +173,15 @@ fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: ()
                 title = { Text(workoutName) },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, contentDescription = "Назад") }
+                },
+                actions = {
+                    IconButton(onClick = { viewModel.toggleDone() }) {
+                        Icon(
+                            if (isDone) Icons.Default.CheckCircle else Icons.Default.Check,
+                            contentDescription = if (isDone) "Вернуть в план" else "Отметить выполненной",
+                            tint = if (isDone) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
             )
         }
@@ -181,9 +193,8 @@ fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: ()
                 }
             } else {
                 val grouped = exercises.groupBy { it.blockTitle }
-                val orderedBlocks = grouped.toList()
                 LazyColumn {
-                    orderedBlocks.forEach { (blockTitle, list) ->
+                    grouped.forEach { (blockTitle, list) ->
                         item(key = "header_$blockTitle") {
                             Text(blockTitle, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(vertical = 8.dp))
                         }
