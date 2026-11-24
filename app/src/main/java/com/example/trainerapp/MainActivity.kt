@@ -10,7 +10,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp // <-- ДОБАВЛЕН ИМПОРТ
+import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -57,9 +57,7 @@ class MainActivity : ComponentActivity() {
                             val workoutName = backStackEntry.arguments?.getString("workoutName") ?: ""
                             ClientWorkoutLogScreen(workoutId = workoutId, workoutName = workoutName, onBackClick = { navController.popBackStack() })
                         }
-                        composable("client_history/{clientId}") { 
-                            Text("История тренировок (в разработке)", modifier = Modifier.padding(16.dp))
-                        }
+                        composable("client_history/{clientId}") { Text("История (в разработке)", modifier = Modifier.padding(16.dp)) }
                         composable("templates") { TemplateScreen(onMacroClick = { id, name -> navController.navigate("macro_detail/$id/$name") }) }
                         composable("macro_detail/{macroId}/{macroName}") { backStackEntry ->
                             val id = backStackEntry.arguments?.getString("macroId")?.toLongOrNull() ?: 0L
