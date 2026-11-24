@@ -26,12 +26,13 @@ data class Workout(
     val name: String
 )
 
+// Блок теперь имеет название и тип
 @Entity(tableName = "exercise_blocks")
 data class ExerciseBlock(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val workoutId: Long,
-    val section: String = "MAIN",
-    val blockType: String = "SINGLE"
+    val blockTitle: String, // "Разминка", "Скилл", "Силовая", "Меткон"
+    val blockType: String = "LINEAR" // LINEAR, CIRCUIT, TEXT
 )
 
 @Entity(tableName = "template_exercises")
@@ -44,7 +45,7 @@ data class TemplateExercise(
     val targetReps: String,
     val targetWeight: Double?,
     val note: String? = null,
-    val metricType: String = "REPS"
+    val metricType: String = "REPS" // REPS, WEIGHT, TIME, DISTANCE, CALORIES
 )
 
 @Entity(tableName = "client_programs")
@@ -73,8 +74,8 @@ data class ClientExercise(
     val clientWorkoutId: Long,
     val exerciseName: String,
     val order: Int,
-    val section: String = "MAIN",
-    val blockType: String = "SINGLE",
+    val blockTitle: String,
+    val blockType: String,
     val targetSets: Int,
     val targetReps: String,
     val note: String? = null,
@@ -88,7 +89,7 @@ data class ExerciseLog(
     val setNumber: Int,
     val actualReps: Int,
     val actualWeight: Double,
-    val resultText: String? = null,
+    val resultText: String? = null, // Для меткона
     val note: String? = null,
     val date: Long = System.currentTimeMillis()
 )
