@@ -68,4 +68,92 @@ class ClientWorkoutLogViewModelFactory(private val application: Application, pri
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String
+fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: () -> Unit) {
+    val context = LocalContext.current
+    val application = context.applicationContext as Application
+    val viewModel: ClientWorkoutLogViewModel = viewModel(factory = ClientWorkoutLogViewModelFactory(application, workoutId))
+    val exercises by viewModel.exercises.collectAsState(initial = emptyList())
+    val historyDialog by viewModel.historyDialog.collectAsState()
+
+    if (historyDialog != null) {
+        AlertDialog(
+            onDismissRequest = { viewModel.closeHistory() },
+            title = { Text("История: ${historyDialog!!.first}") },
+            text = {
+                if (historyDialog!!.second.isEmpty()) Text("Нет записей.")
+                else LazyColumn {
+                    items(historyDialog!!.second) { log ->
+                        Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).combinedClickable(onClick = {}, onLongClick = { viewModel.deleteLog(log.id) }), shape = RoundedCornerShape(8.dp)) {
+                            Text("Подход ${log.setNumber}: ${log.actualWeight} кг x ${log.actualReps} (${log.note ?: ""})", modifier = Modifier.padding(8.dp))
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { viewModel.closeHistory() }) { Text("Закрыть") } }
+        )
+    }
+
+    Scaffold(
+        topBar = { TopAppBar(title = { Text(workoutName) }, navigationIcon = { IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, contentDescription = "Назад") } }) }
+    ) { paddingValues ->
+        Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)) {
+            if (exercises.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("В этой тренировке нет упражнений.", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)) }
+            } else {
+                val grouped = exercises.groupBy { it.blockTitle }
+                LazyColumn {
+                    grouped.forEach { (blockTitle, list) ->
+                        item { Text(blockTitle, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(vertical = 8.dp)) }
+                        items(list) { ex ->
+                            var setNum by remember { mutableStateOf("1") }
+                            var reps by remember { mutableStateOf(ex.targetReps) }
+                            var weight by remember { mutableStateOf("") }
+                            var note by remember { mutableStateOf("") }
+                            val isCircuit = ex.blockType == "CIRCUIT"
+
+                            LaunchedEffect(ex.id) {
+                                if (!isCircuit) {
+                                    val lastWeight = viewModel.getLastWeight(ex.id)
+                                    if (lastWeight != null) weight = lastWeight.toString()
+                                }
+                            }
+
+                            Card(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(2.dp)) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(ex.exerciseName, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                                        TextButton(onClick = { viewModel.showHistory(ex.exerciseName, ex.id) }) { Text("История") }
+                                    }
+                                    Text("План: ${if (isCircuit) "Меткон" else "${ex.targetSets} x ${ex.targetReps}"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    
+                                    if (isCircuit) {
+                                        OutlinedTextField(value = reps, onValueChange = { reps = it }, label = { Text("Результат") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
+                                    } else {
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            OutlinedTextField(value = setNum, onValueChange = { setNum = it }, label = { Text("Подх.") }, modifier = Modifier.weight(0.5f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), shape = RoundedCornerShape(12.dp))
+                                            OutlinedTextField(value = weight, onValueChange = { weight = it }, label = { Text("Вес") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), shape = RoundedCornerShape(12.dp))
+                                            OutlinedTextField(value = reps, onValueChange = { reps = it }, label = { Text("Повт.") }, modifier = Modifier.weight(0.8f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), shape = RoundedCornerShape(12.dp))
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("Комментарий") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Button(
+                                        onClick = { 
+                                            viewModel.saveLog(ex.id, setNum, reps, weight, note, isCircuit)
+                                            setNum = (setNum.toIntOrNull()?.plus(1) ?: 2).toString()
+                                            weight = ""
+                                            note = ""
+                                        },
+                                        modifier = Modifier.align(Alignment.End), shape = RoundedCornerShape(12.dp)
+                                    ) { Text("Записать") }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
