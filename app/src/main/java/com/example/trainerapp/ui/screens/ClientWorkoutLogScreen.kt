@@ -6,8 +6,10 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
@@ -29,42 +31,93 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class ClientWorkoutLogViewModel(application: Application, workoutId: Long) : AndroidViewModel(application) {
+class ClientWorkoutLogViewModel(application: Application, val workoutId: Long) : AndroidViewModel(application) {
     private val dao = AppDatabase.getDatabase(application).appDao()
     val exercises = dao.getClientExercises(workoutId)
 
+    private val _clientId = MutableStateFlow<Long?>(null)
+
+    // Данные для истории: имя упражнения + список логов
     private val _historyDialog = MutableStateFlow<Pair<String, List<ExerciseLog>>?>(null)
     val historyDialog: StateFlow<Pair<String, List<ExerciseLog>>?> = _historyDialog.asStateFlow()
 
-    fun showHistory(exerciseName: String, exerciseId: Long) {
+    private val _lastWeights = MutableStateFlow<Map<Long, Double?>>(emptyMap())
+    val lastWeights: StateFlow<Map<Long, Double?>> = _lastWeights.asStateFlow()
+
+    init {
         viewModelScope.launch {
-            val logs = mutableListOf<ExerciseLog>()
-            dao.getLogsForExercise(exerciseId).collect { logs.clear(); logs.addAll(it); _historyDialog.value = Pair(exerciseName, logs.toList()) }
+            _clientId.value = dao.getClientIdForWorkoutSync(workoutId)
+            val map = mutableMapOf<Long, Double?>()
+            dao.getClientExercises(workoutId).first().forEach { ex ->
+                if (ex.blockType != "CIRCUIT") map[ex.id] = dao.getLastLogForExercise(ex.id)?.actualWeight
+            }
+            _lastWeights.value = map
         }
     }
-    fun closeHistory() { _historyDialog.value = null }
-    fun deleteLog(logId: Long) { viewModelScope.launch { dao.deleteLog(logId); closeHistory() } }
 
-    suspend fun getLastWeight(exerciseId: Long): Double? = dao.getLastLogForExercise(exerciseId)?.actualWeight
+    fun showHistory(exerciseName: String, exerciseId: Long) {
+        viewModelScope.launch {
+            val clientId = _clientId.value
+            val logs = if (clientId != null) {
+                dao.getHistoryForExercise(clientId, exerciseName)
+            } else {
+                dao.getLogsForExerciseSync(exerciseId)
+            }
+            _historyDialog.value = Pair(exerciseName, logs)
+        }
+    }
+
+    fun closeHistory() { _historyDialog.value = null }
+
+    fun deleteLog(logId: Long, exerciseName: String) {
+        viewModelScope.launch {
+            dao.deleteLog(logId)
+            val clientId = _clientId.value
+            val fresh = if (clientId != null) {
+                dao.getHistoryForExercise(clientId, exerciseName)
+            } else emptyList()
+            _historyDialog.value = Pair(exerciseName, fresh)
+        }
+    }
 
     fun saveLog(exerciseId: Long, setNum: String, reps: String, weight: String, note: String, isCircuit: Boolean) {
         val s = setNum.toIntOrNull() ?: 1
         val r = reps.toIntOrNull() ?: 0
-        val w = weight.toDoubleOrNull() ?: 0.0
+        val w = weight.trim().replace(',', '.').toDoubleOrNull() ?: 0.0
         if (r > 0 || isCircuit) {
             viewModelScope.launch {
-                dao.insertExerciseLog(ExerciseLog(clientExerciseId = exerciseId, setNumber = s, actualReps = r, actualWeight = w, resultText = if (isCircuit) reps else null, note = note))
+                dao.insertExerciseLog(
+                    ExerciseLog(
+                        clientExerciseId = exerciseId,
+                        setNumber = s,
+                        actualReps = r,
+                        actualWeight = w,
+                        resultText = if (isCircuit) reps.trim() else null,
+                        note = note.trim().ifEmpty { null }
+                    )
+                )
+                if (!isCircuit) {
+                    _lastWeights.value = _lastWeights.value + (exerciseId to w)
+                }
             }
         }
     }
 }
 
-class ClientWorkoutLogViewModelFactory(private val application: Application, private val workoutId: Long) : ViewModelProvider.Factory {
+class ClientWorkoutLogViewModelFactory(
+    private val application: Application,
+    private val workoutId: Long
+) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(ClientWorkoutLogViewModel::class.java)) { @Suppress("UNCHECKED_CAST") return ClientWorkoutLogViewModel(application, workoutId) as T }
+        if (modelClass.isAssignableFrom(ClientWorkoutLogViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST") return ClientWorkoutLogViewModel(application, workoutId) as T
+        }
         throw IllegalArgumentException("Unknown ViewModel class")
     }
 }
+
+private fun formatWeight(w: Double): String =
+    if (w == w.toLong().toDouble()) w.toLong().toString() else w.toString()
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -72,19 +125,37 @@ fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: ()
     val context = LocalContext.current
     val application = context.applicationContext as Application
     val viewModel: ClientWorkoutLogViewModel = viewModel(factory = ClientWorkoutLogViewModelFactory(application, workoutId))
+
     val exercises by viewModel.exercises.collectAsState(initial = emptyList())
     val historyDialog by viewModel.historyDialog.collectAsState()
+    val lastWeights by viewModel.lastWeights.collectAsState()
 
-    if (historyDialog != null) {
+    historyDialog?.let { (name, logs) ->
         AlertDialog(
             onDismissRequest = { viewModel.closeHistory() },
-            title = { Text("История: ${historyDialog!!.first}") },
+            title = { Text("История: $name") },
             text = {
-                if (historyDialog!!.second.isEmpty()) Text("Нет записей.")
-                else LazyColumn {
-                    items(historyDialog!!.second) { log ->
-                        Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).combinedClickable(onClick = {}, onLongClick = { viewModel.deleteLog(log.id) }), shape = RoundedCornerShape(8.dp)) {
-                            Text("Подход ${log.setNumber}: ${log.actualWeight} кг x ${log.actualReps} (${log.note ?: ""})", modifier = Modifier.padding(8.dp))
+                if (logs.isEmpty()) Text("Нет записей.")
+                else LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
+                    items(logs, key = { it.id }) { log ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).combinedClickable(
+                                onClick = {},
+                                onLongClick = { viewModel.deleteLog(log.id, name) }
+                            ),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(8.dp)) {
+                                val dateText = java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.getDefault())
+                                    .format(java.util.Date(log.date))
+                                Text(
+                                    "Подход ${log.setNumber}: ${formatWeight(log.actualWeight)} кг × ${log.actualReps} · $dateText",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                if (!log.note.isNullOrBlank()) {
+                                    Text(log.note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                                }
+                            }
                         }
                     }
                 }
@@ -94,59 +165,125 @@ fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: ()
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text(workoutName) }, navigationIcon = { IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, contentDescription = "Назад") } }) }
+        topBar = {
+            TopAppBar(
+                title = { Text(workoutName) },
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, contentDescription = "Назад") }
+                }
+            )
+        }
     ) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)) {
             if (exercises.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("В этой тренировке нет упражнений.", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)) }
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("В этой тренировке нет упражнений.", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f))
+                }
             } else {
                 val grouped = exercises.groupBy { it.blockTitle }
+                val orderedBlocks = grouped.toList()
                 LazyColumn {
-                    grouped.forEach { (blockTitle, list) ->
-                        item { Text(blockTitle, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(vertical = 8.dp)) }
-                        items(list) { ex ->
-                            var setNum by remember { mutableStateOf("1") }
-                            var reps by remember { mutableStateOf(ex.targetReps) }
-                            var weight by remember { mutableStateOf("") }
-                            var note by remember { mutableStateOf("") }
+                    orderedBlocks.forEach { (blockTitle, list) ->
+                        item(key = "header_$blockTitle") {
+                            Text(blockTitle, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(vertical = 8.dp))
+                        }
+                        items(list, key = { it.id }) { ex ->
+                            var setNum by remember(ex.id) { mutableStateOf("1") }
+                            var reps by remember(ex.id) { mutableStateOf(ex.targetReps) }
+                            var weight by remember(ex.id) { mutableStateOf("") }
+                            var note by remember(ex.id) { mutableStateOf("") }
+                            var showError by remember(ex.id) { mutableStateOf(false) }
                             val isCircuit = ex.blockType == "CIRCUIT"
 
-                            LaunchedEffect(ex.id) {
-                                if (!isCircuit) {
-                                    val lastWeight = viewModel.getLastWeight(ex.id)
-                                    if (lastWeight != null) weight = lastWeight.toString()
+                            LaunchedEffect(lastWeights) {
+                                if (!isCircuit && weight.isEmpty()) {
+                                    lastWeights[ex.id]?.let { weight = formatWeight(it) }
                                 }
                             }
 
-                            Card(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(2.dp)) {
+                            Card(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                shape = RoundedCornerShape(16.dp),
+                                elevation = CardDefaults.cardElevation(2.dp)
+                            ) {
                                 Column(modifier = Modifier.padding(16.dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(ex.exerciseName, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                                         TextButton(onClick = { viewModel.showHistory(ex.exerciseName, ex.id) }) { Text("История") }
                                     }
-                                    Text("План: ${if (isCircuit) "Меткон" else "${ex.targetSets} x ${ex.targetReps}"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                                    Text(
+                                        "План: ${if (isCircuit) "Меткон" else "${ex.targetSets} × ${ex.targetReps}"}" +
+                                            (ex.targetWeight?.let { " · ${formatWeight(it)} кг" } ?: ""),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
                                     Spacer(modifier = Modifier.height(12.dp))
-                                    
+
                                     if (isCircuit) {
-                                        OutlinedTextField(value = reps, onValueChange = { reps = it }, label = { Text("Результат") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
+                                        OutlinedTextField(
+                                            value = reps,
+                                            onValueChange = { reps = it },
+                                            label = { Text("Результат") },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(12.dp)
+                                        )
                                     } else {
                                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            OutlinedTextField(value = setNum, onValueChange = { setNum = it }, label = { Text("Подх.") }, modifier = Modifier.weight(0.5f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), shape = RoundedCornerShape(12.dp))
-                                            OutlinedTextField(value = weight, onValueChange = { weight = it }, label = { Text("Вес") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), shape = RoundedCornerShape(12.dp))
-                                            OutlinedTextField(value = reps, onValueChange = { reps = it }, label = { Text("Повт.") }, modifier = Modifier.weight(0.8f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), shape = RoundedCornerShape(12.dp))
+                                            OutlinedTextField(
+                                                value = setNum,
+                                                onValueChange = { setNum = it },
+                                                label = { Text("Подх.") },
+                                                modifier = Modifier.weight(0.5f),
+                                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                                shape = RoundedCornerShape(12.dp)
+                                            )
+                                            OutlinedTextField(
+                                                value = weight,
+                                                onValueChange = { weight = it },
+                                                label = { Text("Вес") },
+                                                modifier = Modifier.weight(1f),
+                                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                                shape = RoundedCornerShape(12.dp)
+                                            )
+                                            OutlinedTextField(
+                                                value = reps,
+                                                onValueChange = {
+                                                    reps = it
+                                                    showError = false
+                                                },
+                                                label = { Text("Повт.") },
+                                                modifier = Modifier.weight(0.8f),
+                                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                                shape = RoundedCornerShape(12.dp),
+                                                isError = showError,
+                                                supportingText = { if (showError) Text("Укажите повторы") }
+                                            )
                                         }
                                     }
                                     Spacer(modifier = Modifier.height(8.dp))
-                                    OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("Комментарий") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
+                                    OutlinedTextField(
+                                        value = note,
+                                        onValueChange = { note = it },
+                                        label = { Text("Комментарий") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
                                     Spacer(modifier = Modifier.height(8.dp))
                                     Button(
-                                        onClick = { 
+                                        onClick = {
+                                            val r = reps.toIntOrNull() ?: 0
+                                            if (!isCircuit && r <= 0) {
+                                                showError = true
+                                                return@Button
+                                            }
                                             viewModel.saveLog(ex.id, setNum, reps, weight, note, isCircuit)
                                             setNum = (setNum.toIntOrNull()?.plus(1) ?: 2).toString()
                                             weight = ""
                                             note = ""
+                                            if (isCircuit) reps = ""
                                         },
-                                        modifier = Modifier.align(Alignment.End), shape = RoundedCornerShape(12.dp)
+                                        modifier = Modifier.align(Alignment.End),
+                                        shape = RoundedCornerShape(12.dp)
                                     ) { Text("Записать") }
                                 }
                             }
