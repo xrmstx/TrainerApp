@@ -152,4 +152,16 @@ interface AppDao {
         LIMIT 1
     """)
     suspend fun getClientIdForWorkoutSync(workoutId: Long): Long?
+    @Query("""
+    SELECT cw.id AS workoutId, cw.name AS workoutName, cw.weekNumber, cw.dayNumber, cw.status,
+           c.name AS clientName, cp.id AS programId
+    FROM client_workouts cw
+    INNER JOIN client_programs cp ON cw.clientProgramId = cp.id
+    INNER JOIN clients c ON cp.clientId = c.id
+    WHERE cw.status = 'PLANNED'
+      AND cw.weekNumber = CAST((:now - cp.startDate) / 604800000 AS INTEGER) + 1
+      AND cp.status = 'ACTIVE'
+    ORDER BY c.name, cw.dayNumber
+""")
+    suspend fun getTodayWorkoutsSync(now: Long): List<TodayWorkout>
 }
