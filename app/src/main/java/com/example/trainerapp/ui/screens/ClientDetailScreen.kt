@@ -64,23 +64,24 @@ class ClientDetailViewModel(
     fun updateClient(goal: String, notes: String) {
         viewModelScope.launch {
             val current = _client.value ?: return@launch
-            dao.insertClient(
-                current.copy(
-                    goal = goal.trim().ifEmpty { null },
-                    notes = notes.trim().ifEmpty { null }
-                )
+            val updated = current.copy(
+                goal = goal.trim().ifEmpty { null },
+                notes = notes.trim().ifEmpty { null }
             )
-            _client.value = current.copy(goal = goal.trim().ifEmpty { null }, notes = notes.trim().ifEmpty { null })
+            dao.insertClient(updated)
+            _client.value = updated
             toggleEditDialog()
         }
     }
 
+    // Каскад по внешним ключам чистит программы, тренировки, упражнения и логи
     fun deleteClient() {
-        viewModelScope.launch { dao.deleteClient(clientId) } // каскад чистит программы, тренировки, упражнения и логи
+        viewModelScope.launch { dao.deleteClient(clientId) }
     }
 
+    // Каскад чистит тренировки, упражнения и логи программы
     fun deleteProgram(programId: Long) {
-        viewModelScope.launch { dao.deleteClientProgram(programId) } // каскад чистит тренировки, упражнения и логи
+        viewModelScope.launch { dao.deleteClientProgram(programId) }
     }
 
     fun assignProgram(macrocycle: Macrocycle) {
@@ -159,7 +160,9 @@ fun ClientDetailScreen(
     val context = LocalContext.current
     val application = context.applicationContext as Application
 
-    val viewModel: ClientDetailViewModel = viewModel(factory = ClientDetailViewModelFactory(application, clientId))
+    val viewModel: ClientDetailViewModel = viewModel(
+        factory = ClientDetailViewModelFactory(application, clientId)
+    )
 
     val client by viewModel.client.collectAsState()
     val programs by viewModel.programs.collectAsState(initial = emptyList())
@@ -175,7 +178,11 @@ fun ClientDetailScreen(
         AlertDialog(
             onDismissRequest = { confirmDeleteClient = false },
             title = { Text("Удалить клиента?") },
-            text = { Text("Клиент «${client?.name ?: ""}» и все его программы, тренировки и история будут удалены безвозвратно.") },
+            text = {
+                Text(
+                    "Клиент «${client?.name ?: ""}» и все его программы, тренировки и история будут удалены безвозвратно."
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.deleteClient()
@@ -183,7 +190,9 @@ fun ClientDetailScreen(
                     onBackClick()
                 }) { Text("Удалить", color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { confirmDeleteClient = false }) { Text("Отмена") } }
+            dismissButton = {
+                TextButton(onClick = { confirmDeleteClient = false }) { Text("Отмена") }
+            }
         )
     }
 
@@ -191,65 +200,61 @@ fun ClientDetailScreen(
         AlertDialog(
             onDismissRequest = { programToDelete = null },
             title = { Text("Удалить программу?") },
-            text = { Text("«${programToDelete!!.name}» со всеми тренировками и историей будет удалена безвозвратно.") },
+            text = {
+                Text(
+                    "«${programToDelete!!.name.ifEmpty { "Программа" }}» со всеми тренировками и историей будет удалена безвозвратно."
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.deleteProgram(programToDelete!!.id)
                     programToDelete = null
                 }) { Text("Удалить", color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { programToDelete = null }) { Text("Отмена") } }
+            dismissButton = {
+                TextButton(onClick = { programToDelete = null }) { Text("Отмена") }
+            }
         )
     }
 
-    if (showEditDialog && client != null) {
-        var goal by remember(client.id) { mutableStateOf(client.goal ?: "") }
-        var notes by remember(client.id) { mutableStateOf(client.notes ?: "") }
+    // Диалог редактирования: открываем только когда клиент загружен,
+    // иначе пустые поля затёрли бы данные при сохранении
+    if (showEditDialog) {
+        val currentClient = client
+        if (currentClient != null) {
+            var goal by remember(currentClient.id) { mutableStateOf(currentClient.goal ?: "") }
+            var notes by remember(currentClient.id) { mutableStateOf(currentClient.notes ?: "") }
 
-        AlertDialog(
-            onDismissRequest = { viewModel.toggleEditDialog() },
-            title = { Text("Редактировать профиль") },
-            text = {
-                Column {
-                    OutlinedTextField(
-                        value = goal,
-                        onValueChange = { goal = it },
-                        label = { Text("Цель") },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(
-    if (showEditDialog && client != null) {
-        var goal by remember(client.id) { mutableStateOf(client.goal ?: "") }
-        var notes by remember(client.id) { mutableStateOf(client.notes ?: "") }
-
-        AlertDialog(
-            onDismissRequest = { viewModel.toggleEditDialog() },
-            title = { Text("Редактировать профиль") },
-            text = {
-                Column {
-                    OutlinedTextField(
-                        value = goal,
-                        onValueChange = { goal = it },
-                        label = { Text("Цель") },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = notes,
-                        onValueChange = { notes = it },
-                        label = { Text("Заметки") },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
+            AlertDialog(
+                onDismissRequest = { viewModel.toggleEditDialog() },
+                title = { Text("Редактировать профиль") },
+                text = {
+                    Column {
+                        OutlinedTextField(
+                            value = goal,
+                            onValueChange = { goal = it },
+                            label = { Text("Цель") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = notes,
+                            onValueChange = { notes = it },
+                            label = { Text("Заметки") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.updateClient(goal, notes) }) { Text("Сохранить") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { viewModel.toggleEditDialog() }) { Text("Отмена") }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = { viewModel.updateClient(goal, notes) }) { Text("Сохранить") }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.toggleEditDialog() }) { Text("Отмена") }
-            }
-        )
+            )
+        }
     }
 
     if (showDialog) {
@@ -286,11 +291,19 @@ fun ClientDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(text = client?.name ?: "Профиль", fontWeight = FontWeight.Bold) },
+                title = {
+                    Text(
+                        text = client?.name ?: "Профиль",
+                        fontWeight = FontWeight.Bold
+                    )
+                },
                 navigationIcon = {
-                    IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, contentDescription = "Назад") }
+                    IconButton(onClick = onBackClick) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
+                    }
                 },
                 actions = {
+                    // Кнопки видимы только после загрузки клиента
                     if (client != null) {
                         IconButton(onClick = { viewModel.toggleEditDialog() }) {
                             Icon(Icons.Default.Edit, contentDescription = "Редактировать")
@@ -304,7 +317,10 @@ fun ClientDetailScreen(
         }
     ) { paddingValues ->
         Column(
-            modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(16.dp)
         ) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -334,11 +350,16 @@ fun ClientDetailScreen(
             Button(
                 onClick = { viewModel.openDialog() },
                 enabled = !isAssigning,
-                modifier = Modifier.fillMaxWidth().height(50.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 if (isAssigning) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp
+                    )
                 } else {
                     Icon(Icons.Default.Add, contentDescription = null)
                 }
@@ -350,7 +371,9 @@ fun ClientDetailScreen(
 
             OutlinedButton(
                 onClick = onHistoryClick,
-                modifier = Modifier.fillMaxWidth().height(50.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Icon(Icons.Default.List, contentDescription = null)
@@ -369,7 +392,10 @@ fun ClientDetailScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             if (programs.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
                     Text(
                         text = "Нет назначенных программ",
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
@@ -406,7 +432,9 @@ fun ClientDetailScreen(
                                         color = MaterialTheme.colorScheme.primary
                                     )
                                 }
+
                                 Spacer(modifier = Modifier.height(8.dp))
+
                                 LinearProgressIndicator(
                                     progress = if (program.totalWeeks > 0) {
                                         (program.weekNumber.toFloat() / program.totalWeeks).coerceIn(0f, 1f)
