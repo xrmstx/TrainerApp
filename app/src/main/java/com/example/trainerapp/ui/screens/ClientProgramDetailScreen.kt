@@ -23,7 +23,6 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.trainerapp.data.local.AppDatabase
 import com.example.trainerapp.data.model.ClientProgram
-import com.example.trainerapp.data.model.ClientWorkout
 import com.example.trainerapp.ui.theme.StatusDone
 import com.example.trainerapp.ui.theme.StatusPlanned
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -53,13 +52,6 @@ class ClientProgramDetailViewModel(application: Application, private val program
             )
         }
     }
-
-    fun deleteProgram(onDeleted: () -> Unit) {
-        viewModelScope.launch {
-            dao.deleteClientProgram(programId)
-            onDeleted()
-        }
-    }
 }
 
 class ClientProgramDetailViewModelFactory(
@@ -76,7 +68,12 @@ class ClientProgramDetailViewModelFactory(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ClientProgramDetailScreen(programId: Long, programName: String, onBackClick: () -> Unit) {
+fun ClientProgramDetailScreen(
+    programId: Long,
+    programName: String,
+    onBackClick: () -> Unit,
+    onWorkoutClick: (Long, String) -> Unit
+) {
     val application = LocalContext.current.applicationContext as Application
     val viewModel: ClientProgramDetailViewModel =
         viewModel(factory = ClientProgramDetailViewModelFactory(application, programId))
@@ -111,8 +108,8 @@ fun ClientProgramDetailScreen(programId: Long, programName: String, onBackClick:
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.primary
                 )
+                Spacer(modifier = Modifier.height(8.dp))
             }
-            Spacer(modifier = Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 LinearProgressIndicator(
                     progress = progress,
@@ -147,20 +144,13 @@ fun ClientProgramDetailScreen(programId: Long, programName: String, onBackClick:
                                 containerColor = if (isDone) StatusDone.copy(alpha = 0.12f)
                                 else MaterialTheme.colorScheme.surface
                             ),
-                            onClick = { viewModel.toggleStatus(w.id, w.status) }
+                            onClick = { onWorkoutClick(w.id, w.name) }
                         ) {
                             Row(
                                 modifier = Modifier.padding(14.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    if (isDone) Icons.Default.CheckCircle else Icons.Default.Check,
-                                    contentDescription = null,
-                                    tint = if (isDone) StatusDone
-                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                                )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column {
+                                Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         w.name,
                                         style = MaterialTheme.typography.titleSmall,
@@ -170,6 +160,13 @@ fun ClientProgramDetailScreen(programId: Long, programName: String, onBackClick:
                                         "День ${w.dayNumber}",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                    )
+                                }
+                                IconButton(onClick = { viewModel.toggleStatus(w.id, w.status) }) {
+                                    Icon(
+                                        if (isDone) Icons.Default.CheckCircle else Icons.Default.Check,
+                                        contentDescription = if (isDone) "Вернуть в план" else "Отметить выполненной",
+                                        tint = if (isDone) StatusDone else StatusPlanned
                                     )
                                 }
                             }
