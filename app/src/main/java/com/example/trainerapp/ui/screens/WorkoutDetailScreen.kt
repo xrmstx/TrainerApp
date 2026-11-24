@@ -3,10 +3,13 @@ package com.example.trainerapp.ui.screens
 import android.app.Application
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -30,12 +33,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 
 class WorkoutDetailViewModel(application: Application, val workoutId: Long) : AndroidViewModel(application) {
     private val dao = AppDatabase.getDatabase(application).appDao()
+
     private val _blocks = MutableStateFlow<List<ExerciseBlock>>(emptyList())
     val blocks: StateFlow<List<ExerciseBlock>> = _blocks.asStateFlow()
     private val _blockExercises = MutableStateFlow<Map<Long, List<TemplateExercise>>>(emptyMap())
@@ -57,7 +58,7 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
     private val _exReps = MutableStateFlow("")
     private val _exNote = MutableStateFlow("")
     private val _exMetric = MutableStateFlow("REPS")
-    private val _exType = MutableStateFlow("LINEAR") // LINEAR или CIRCUIT
+    private val _exType = MutableStateFlow("LINEAR")
     val exName: StateFlow<String> = _exName.asStateFlow()
     val exSets: StateFlow<String> = _exSets.asStateFlow()
     val exReps: StateFlow<String> = _exReps.asStateFlow()
@@ -65,15 +66,12 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
     val exMetric: StateFlow<String> = _exMetric.asStateFlow()
     val exType: StateFlow<String> = _exType.asStateFlow()
 
-    private val _library = MutableStateFlow<List<LibraryEntry>>(emptyList())
-    val library: StateFlow<List<LibraryEntry>> = _library.asStateFlow()
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
     private val _showLibrary = MutableStateFlow(false)
     val showLibrary: StateFlow<Boolean> = _showLibrary.asStateFlow()
 
     init { loadBlocks() }
-
     fun loadBlocks() {
         viewModelScope.launch {
             val list = dao.getBlocksForWorkoutSync(workoutId)
@@ -123,7 +121,11 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
         }
     }
 
-    fun closeExerciseDialog() { _showExerciseDialog.value = false; _editExercise.value = null; _currentBlockId.value = null }
+    fun closeExerciseDialog() {
+        _showExerciseDialog.value = false
+        _editExercise.value = null
+        _currentBlockId.value = null
+    }
 
     fun onNameChange(name: String) { _exName.value = name }
     fun onSetsChange(sets: String) { _exSets.value = sets }
@@ -132,12 +134,7 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
     fun onMetricChange(metric: String) { _exMetric.value = metric }
     fun onTypeChange(type: String) { _exType.value = type }
 
-    fun loadLibrary() {
-        viewModelScope.launch {
-            _library.value = ExerciseLibraryRegistry.allEntries()
-            _showLibrary.value = true
-        }
-    }
+    fun loadLibrary() { _showLibrary.value = true }
     fun closeLibrary() { _showLibrary.value = false }
     fun onSearchChange(query: String) { _searchQuery.value = query }
 
@@ -207,7 +204,6 @@ class WorkoutDetailViewModelFactory(private val application: Application, privat
 private val metricLabels = listOf(
     "REPS" to "Повт.", "WEIGHT" to "Вес", "TIME" to "Время", "DISTANCE" to "Дист.", "CALORIES" to "Ккал"
 )
-
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () -> Unit) {
@@ -228,7 +224,6 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
     val exMetric by viewModel.exMetric.collectAsState()
     val exType by viewModel.exType.collectAsState()
     val showLibrary by viewModel.showLibrary.collectAsState()
-    val library by viewModel.library.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
 
     var blockToDelete by remember { mutableStateOf<ExerciseBlock?>(null) }
@@ -348,7 +343,7 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     TextButton(onClick = { viewModel.loadLibrary() }) {
-                        Icon(Icons.Default.MenuBook, contentDescription = null)
+                        Icon(Icons.Default.Search, contentDescription = null)
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Выбрать из библиотеки")
                     }
@@ -360,7 +355,6 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
     }
 
     if (showLibrary) {
-        val filtered = remember(library, searchQuery) { ExerciseLibraryRegistry.search(searchQuery).also { _ -> /* search работает по полному реестру */ } }
         AlertDialog(
             onDismissRequest = { viewModel.closeLibrary() },
             title = { Text("Библиотека упражнений") },
@@ -400,12 +394,13 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
             confirmButton = { TextButton(onClick = { viewModel.closeLibrary() }) { Text("Закрыть") } }
         )
     }
-
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(workoutName, fontWeight = FontWeight.Bold) },
-                navigationIcon = { IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, contentDescription = "Назад") } },
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, contentDescription = "Назад") }
+                },
                 actions = {
                     IconButton(onClick = { viewModel.openBlockDialog() }) { Icon(Icons.Default.Add, contentDescription = "Добавить блок") }
                 }
