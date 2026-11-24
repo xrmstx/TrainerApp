@@ -12,7 +12,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -56,7 +55,7 @@ class ClientWorkoutLogViewModel(application: Application, val workoutId: Long) :
             _clientId.value = dao.getClientIdForWorkoutSync(workoutId)
             _isDone.value = dao.getClientWorkoutSync(workoutId)?.status != "PLANNED"
             val map = mutableMapOf<Long, Double?>()
-            dao.getClientExercises(workoutId).first().forEach { ex ->
+            dao.getClientExercisesSync(workoutId).forEach { ex ->
                 if (ex.blockType != "CIRCUIT") map[ex.id] = dao.getLastLogForExercise(ex.id)?.actualWeight
             }
             _lastWeights.value = map
@@ -307,8 +306,7 @@ fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: ()
                                                 shape = RoundedCornerShape(12.dp),
                                                 modifier = Modifier.height(44.dp)
                                             ) {
-                                                Icon(Icons.Default.Remove, contentDescription = "Минус 2.5 кг", modifier = Modifier.size(20.dp))
-                                                Text("2.5", modifier = Modifier.padding(start = 2.dp))
+                                                Text("− 2.5", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                                             }
                                             Spacer(modifier = Modifier.width(8.dp))
                                             Text(
@@ -325,8 +323,7 @@ fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: ()
                                                 shape = RoundedCornerShape(12.dp),
                                                 modifier = Modifier.height(44.dp)
                                             ) {
-                                                Icon(Icons.Default.Add, contentDescription = "Плюс 2.5 кг", modifier = Modifier.size(20.dp))
-                                                Text("2.5", modifier = Modifier.padding(start = 2.dp))
+                                                Text("+ 2.5", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                                             }
                                         }
                                     }
