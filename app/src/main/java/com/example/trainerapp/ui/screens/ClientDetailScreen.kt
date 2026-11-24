@@ -122,7 +122,7 @@ class ClientDetailViewModel(
                                 clientWorkoutId = newWorkoutId,
                                 exerciseName = exercise.exerciseName,
                                 order = exercise.order,
-                                blockTitle = block.blockTitle, // <-- ИСПРАВЛЕНО: blockTitle вместо section
+                                blockTitle = block.blockTitle,
                                 blockType = block.blockType,
                                 targetSets = exercise.targetSets,
                                 targetReps = exercise.targetReps,
@@ -394,14 +394,12 @@ fun ClientDetailScreen(
 
                                 Spacer(modifier = Modifier.height(8.dp))
 
-                                // Исправленный прогресс-бар для Material3
+                                // ИСПРАВЛЕНО: используем Float, а не лямбду
                                 LinearProgressIndicator(
-                                    progress = { 
-                                        if (program.totalWeeks > 0) {
-                                            (program.weekNumber.toFloat() / program.totalWeeks).coerceIn(0f, 1f)
-                                        } else {
-                                            0f
-                                        }
+                                    progress = if (program.totalWeeks > 0) {
+                                        (program.weekNumber.toFloat() / program.totalWeeks).coerceIn(0f, 1f)
+                                    } else {
+                                        0f
                                     },
                                     modifier = Modifier.fillMaxWidth(),
                                     color = MaterialTheme.colorScheme.primary
