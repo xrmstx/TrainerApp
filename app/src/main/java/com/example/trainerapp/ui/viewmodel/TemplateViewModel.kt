@@ -18,23 +18,29 @@ class TemplateViewModel(application: Application) : AndroidViewModel(application
     val newMacroName: StateFlow<String> = _newMacroName.asStateFlow()
     private val _newMacroWeeks = MutableStateFlow("")
     val newMacroWeeks: StateFlow<String> = _newMacroWeeks.asStateFlow()
+    private val _weeksError = MutableStateFlow(false)
+    val weeksError: StateFlow<Boolean> = _weeksError.asStateFlow()
 
     fun onNameChange(name: String) { _newMacroName.value = name }
-    fun onWeeksChange(weeks: String) { _newMacroWeeks.value = weeks }
+
+    fun onWeeksChange(weeks: String) {
+        _newMacroWeeks.value = weeks
+        _weeksError.value = false
+    }
 
     fun addMacrocycle() {
         val name = _newMacroName.value.trim()
         val weeks = _newMacroWeeks.value.trim().toIntOrNull() ?: 0
-        if (name.isNotEmpty() && weeks > 0) {
-            viewModelScope.launch {
-                dao.insertMacrocycle(Macrocycle(name = name, durationWeeks = weeks))
-                _newMacroName.value = ""
-                _newMacroWeeks.value = ""
-            }
+        if (name.isEmpty()) return
+        if (weeks !in 1..52) { _weeksError.value = true; return }
+        viewModelScope.launch {
+            dao.insertMacrocycle(Macrocycle(name = name, durationWeeks = weeks))
+            _newMacroName.value = ""
+            _newMacroWeeks.value = ""
         }
     }
 
     fun deleteMacrocycle(id: Long) {
-        viewModelScope.launch { dao.deleteMacrocycle(id) }
+        viewModelScope.launch { dao.deleteMacrocycle(id) } // каскад чистит тренировки, блоки и упражнения
     }
 }
