@@ -36,6 +36,11 @@ android {
     }
 }
 
+// Сюда Room будет писать схемы — они понадобятся для миграций 10 → 11 и далее
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
@@ -50,4 +55,10 @@ dependencies {
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")
     implementation("androidx.navigation:navigation-compose:2.7.7")
+
+    debugImplementation("androidx.compose.ui:ui-tooling")
 }
+
+// Если решите поднять BOM (необязательно, но желательно):
+// замените 2023.08.00, например, на 2024.06.00 —
+// при kotlinCompilerExtensionVersion 1.5.8 нужен Kotlin 1.9.22, проверьте версию в корневом build.gradle.kts
