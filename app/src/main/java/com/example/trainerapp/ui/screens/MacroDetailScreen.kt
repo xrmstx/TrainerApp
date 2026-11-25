@@ -124,6 +124,7 @@ class MacroDetailViewModel(application: Application, val macroId: Long) : Androi
                         TemplateExercise(
                             blockId = cardioId, exerciseName = "Ходьба или велосипед в зоне 2",
                             order = 1, targetSets = 1, targetReps = "40 мин", metricType = "TIME",
+                            targetWeight = null,
                             note = "Пульс 120–140, дыхание носом, разговорный темп"
                         )
                     )
@@ -133,13 +134,15 @@ class MacroDetailViewModel(application: Application, val macroId: Long) : Androi
                     dao.insertTemplateExercise(
                         TemplateExercise(
                             blockId = stretchId, exerciseName = "Растяжка основных групп мышц",
-                            order = 1, targetSets = 1, targetReps = "10 мин", metricType = "TIME"
+                            order = 1, targetSets = 1, targetReps = "10 мин", metricType = "TIME",
+                            targetWeight = null
                         )
                     )
                     dao.insertTemplateExercise(
                         TemplateExercise(
                             blockId = stretchId, exerciseName = "Спокойное дыхание и расслабление",
-                            order = 2, targetSets = 1, targetReps = "5 мин", metricType = "TIME"
+                            order = 2, targetSets = 1, targetReps = "5 мин", metricType = "TIME",
+                            targetWeight = null
                         )
                     )
                 }
