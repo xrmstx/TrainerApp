@@ -13,7 +13,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -28,6 +27,7 @@ fun TemplateScreen(onMacroClick: (Long, String) -> Unit, viewModel: TemplateView
     val name by viewModel.newMacroName.collectAsState()
     val weeks by viewModel.newMacroWeeks.collectAsState()
     val weeksError by viewModel.weeksError.collectAsState()
+    val sessions by viewModel.newMacroSessions.collectAsState()
 
     var macroToDelete by remember { mutableStateOf<Macrocycle?>(null) }
 
@@ -71,6 +71,18 @@ fun TemplateScreen(onMacroClick: (Long, String) -> Unit, viewModel: TemplateView
                 )
             }
             Spacer(modifier = Modifier.height(12.dp))
+            Text("Тренировок в неделю", style = MaterialTheme.typography.labelMedium)
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(3, 4, 5, 6).forEach { count ->
+                    FilterChip(
+                        selected = sessions == count,
+                        onClick = { viewModel.onSessionsChange(count) },
+                        label = { Text("$count") }
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
             Button(
                 onClick = { viewModel.addMacrocycle() },
                 modifier = Modifier.fillMaxWidth().height(50.dp),
@@ -98,7 +110,11 @@ fun TemplateScreen(onMacroClick: (Long, String) -> Unit, viewModel: TemplateView
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text(macro.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                Text("Длительность: ${macro.durationWeeks} нед.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                                Text(
+                                    "Длительность: ${macro.durationWeeks} нед. · Тренировок в неделю: ${macro.sessionsPerWeek}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                )
                             }
                         }
                     }
