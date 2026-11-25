@@ -17,7 +17,8 @@ data class Client(
 data class Macrocycle(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
-    val durationWeeks: Int
+    val durationWeeks: Int,
+    val sessionsPerWeek: Int = 3 // тренировок в неделю (3–6); восстановительные дни идут поверх
 )
 
 // Поле исторически называется mesocycleId, но хранит id макроцикла — не переименовываем, чтобы не ломать существующую базу
@@ -34,7 +35,9 @@ data class Macrocycle(
 data class Workout(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val mesocycleId: Long,
-    val dayNumber: Int,
+    val weekNumber: Int = 1,          // неделя макроцикла, к которой относится день
+    val dayNumber: Int,               // день внутри недели
+    val dayType: String = "TRAINING", // TRAINING — тренировка, RECOVERY — восстановительный день
     val name: String
 )
 
@@ -51,7 +54,7 @@ data class Workout(
 data class ExerciseBlock(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val workoutId: Long,
-    val blockTitle: String, // "Разминка", "Скилл", "Силовая", "Меткон"
+    val blockTitle: String, // "Разминка", "Скилл", "Силовая", "Меткон", "Заминка", "Кардио"
     val blockType: String = "LINEAR", // LINEAR, CIRCUIT, TEXT
     val order: Int = 0,
     val protocol: String = "NONE",   // NONE, AMRAP, EMOM, FOR_TIME, RFT, TABATA, CUSTOM
@@ -115,7 +118,9 @@ data class ClientWorkout(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val clientProgramId: Long,
     val originalWorkoutId: Long,
+    val weekNumber: Int = 1,          // неделя программы клиента
     val dayNumber: Int,
+    val dayType: String = "TRAINING", // TRAINING / RECOVERY
     val name: String,
     val status: String = "PLANNED"
 )
