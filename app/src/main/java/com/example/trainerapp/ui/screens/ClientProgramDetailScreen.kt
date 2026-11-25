@@ -72,12 +72,11 @@ class ClientProgramDetailViewModel(application: Application, private val program
 
     fun onWeekChange(week: Int) { _currentWeek.value = week }
 
-    fun toggleStatus(workoutId: Long, currentStatus: String) {
+    // Прямая установка статуса: нужна для Undo — вернуть ровно прежнее значение,
+    // а не полагаться на текущее состояние flow в момент тапа по «Отменить»
+    fun setWorkoutStatus(workoutId: Long, status: String) {
         viewModelScope.launch {
-            dao.setClientWorkoutStatus(
-                workoutId,
-                if (currentStatus == "DONE") "PLANNED" else "DONE"
-            )
+            dao.setClientWorkoutStatus(workoutId, status)
         }
     }
 
@@ -166,6 +165,8 @@ fun ClientProgramDetailScreen(
     val viewModel: ClientProgramDetailViewModel =
         viewModel(factory = ClientProgramDetailViewModelFactory(application, programId))
     val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     val program by viewModel.program.collectAsState()
     val workouts by viewModel.workouts.collectAsState(initial = emptyList())
@@ -198,6 +199,7 @@ fun ClientProgramDetailScreen(
     )
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(programName.ifEmpty { "Программа" }) },
@@ -215,8 +217,14 @@ fun ClientProgramDetailScreen(
                 .padding(paddingValues)
                 .padding(16.dp)
         ) {
-            // Переключатель недель программы
             if (totalWeeks > 0) {
+                Text(
+                    "Неделя $activeWeek из $totalWeeks",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                // Переключатель недель программы
                 Row(
                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -286,105 +294,122 @@ fun ClientProgramDetailScreen(
             }
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Содержимое недели с анимацией перелистывания
-            AnimatedContent(
-                targetState = activeWeek,
-                transitionSpec = {
-                    if (targetState > initialState) {
-                        (slideInHorizontally(tween(300)) { it / 4 } + fadeIn(tween(300))) togetherWith
-                            (slideOutHorizontally(tween(300)) { -it / 4 } + fadeOut(tween(300)))
-                    } else {
-                        (slideInHorizontally(tween(300)) { -it / 4 } + fadeIn(tween(300))) togetherWith
-                            (slideOutHorizontally(tween(300)) { it / 4 } + fadeOut(tween(300)))
-                    }
-                },
-                label = "weekContent"
-            ) { week ->
-                // Внутри лямбды используем параметр week, а не activeWeek из замыкания
-                val contentWorkouts = workouts.filter { it.weekNumber == week }.sortedBy { it.dayNumber }
+            // Пустая программа — вне AnimatedContent: чипов нет, анимировать нечего
+            if (workouts.isEmpty()) {
+                EmptyState(
+                    icon = Icons.Default.EventNote,
+                    title = "Программа пуста",
+                    subtitle = "Тренировки не назначены. Попросите тренера назначить программу заново."
+                )
+            } else {
+                // Содержимое недели с анимацией перелистывания
+                AnimatedContent(
+                    targetState = activeWeek,
+                    transitionSpec = {
+                        if (targetState > initialState) {
+                            (slideInHorizontally(tween(300)) { it / 4 } + fadeIn(tween(300))) togetherWith
+                                (slideOutHorizontally(tween(300)) { -it / 4 } + fadeOut(tween(300)))
+                        } else {
+                            (slideInHorizontally(tween(300)) { -it / 4 } + fadeIn(tween(300))) togetherWith
+                                (slideOutHorizontally(tween(300)) { it / 4 } + fadeOut(tween(300)))
+                        }
+                    },
+                    label = "weekContent"
+                ) { week ->
+                    // Внутри лямбды используем параметр week, а не activeWeek из замыкания
+                    val contentWorkouts = workouts.filter { it.weekNumber == week }.sortedBy { it.dayNumber }
 
-                if (workouts.isEmpty()) {
-                    EmptyState(
-                        icon = Icons.Default.EventNote,
-                        title = "Программа пуста",
-                        subtitle = "Тренировки не назначены. Попросите тренера назначить программу заново."
-                    )
-                } else if (contentWorkouts.isEmpty()) {
-                    EmptyState(
-                        icon = Icons.Default.HourglassEmpty,
-                        title = "Неделя $week пуста",
-                        subtitle = "В шаблоне не заполнена эта неделя — проверьте шаблон программы."
-                    )
-                } else {
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(contentWorkouts, key = { it.id }) { w ->
-                            val isDone = w.status == "DONE"
-                            val isRecovery = w.dayType == "RECOVERY"
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(14.dp),
-                                elevation = CardDefaults.cardElevation(2.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = when {
-                                        isDone -> StatusDone.copy(alpha = 0.12f)
-                                        isRecovery -> MaterialTheme.colorScheme.tertiary.copy(alpha = 0.08f)
-                                        else -> MaterialTheme.colorScheme.surface
-                                    }
-                                ),
-                                onClick = { onWorkoutClick(w.id, w.name) }
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(14.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                    if (contentWorkouts.isEmpty()) {
+                        EmptyState(
+                            icon = Icons.Default.HourglassEmpty,
+                            title = "Неделя $week пуста",
+                            subtitle = "В шаблоне не заполнена эта неделя — проверьте шаблон программы."
+                        )
+                    } else {
+                        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(contentWorkouts, key = { it.id }) { w ->
+                                val isDone = w.status == "DONE"
+                                val isRecovery = w.dayType == "RECOVERY"
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(14.dp),
+                                    elevation = CardDefaults.cardElevation(2.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = when {
+                                            isDone -> StatusDone.copy(alpha = 0.12f)
+                                            isRecovery -> MaterialTheme.colorScheme.tertiary.copy(alpha = 0.08f)
+                                            else -> MaterialTheme.colorScheme.surface
+                                        }
+                                    ),
+                                    onClick = { onWorkoutClick(w.id, w.name) }
                                 ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            w.name,
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            if (isRecovery) {
-                                                Icon(
-                                                    Icons.Default.SelfImprovement,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.tertiary,
-                                                    modifier = Modifier.size(14.dp)
-                                                )
-                                                Spacer(modifier = Modifier.width(4.dp))
-                                            }
+                                    Row(
+                                        modifier = Modifier.padding(14.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
                                             Text(
-                                                if (isRecovery) "Восстановительный день" else "День ${w.dayNumber}",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = if (isRecovery) MaterialTheme.colorScheme.tertiary
-                                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                                w.name,
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.SemiBold
                                             )
-                                        }
-                                    }
-                                    // Отправить тренировку клиенту в мессенджер
-                                    IconButton(onClick = {
-                                        viewModel.shareWorkout(w) { text ->
-                                            val sendIntent = Intent().apply {
-                                                action = Intent.ACTION_SEND
-                                                putExtra(Intent.EXTRA_TEXT, text)
-                                                type = "text/plain"
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                if (isRecovery) {
+                                                    Icon(
+                                                        Icons.Default.SelfImprovement,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.tertiary,
+                                                        modifier = Modifier.size(14.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                }
+                                                Text(
+                                                    if (isRecovery) "Восстановительный день" else "День ${w.dayNumber}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = if (isRecovery) MaterialTheme.colorScheme.tertiary
+                                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                                )
                                             }
-                                            context.startActivity(
-                                                Intent.createChooser(sendIntent, "Отправить тренировку")
+                                        }
+                                        // Отправить тренировку клиенту в мессенджер
+                                        IconButton(onClick = {
+                                            viewModel.shareWorkout(w) { text ->
+                                                val sendIntent = Intent().apply {
+                                                    action = Intent.ACTION_SEND
+                                                    putExtra(Intent.EXTRA_TEXT, text)
+                                                    type = "text/plain"
+                                                }
+                                                context.startActivity(
+                                                    Intent.createChooser(sendIntent, "Отправить тренировку")
+                                                )
+                                            }
+                                        }) {
+                                            Icon(
+                                                Icons.Default.Share,
+                                                contentDescription = "Отправить тренировку клиенту"
                                             )
                                         }
-                                    }) {
-                                        Icon(
-                                            Icons.Default.Share,
-                                            contentDescription = "Отправить тренировку клиенту"
-                                        )
-                                    }
-                                    IconButton(onClick = { viewModel.toggleStatus(w.id, w.status) }) {
-                                        Icon(
-                                            if (isDone) Icons.Default.CheckCircle else Icons.Default.Check,
-                                            contentDescription = if (isDone) "Вернуть в план" else "Отметить выполненной",
-                                            tint = if (isDone) StatusDone else StatusPlanned
-                                        )
+                                        IconButton(onClick = {
+                                            // Запоминаем прежний статус ДО переключения — снекбар вернёт именно его
+                                            val wasDone = w.status == "DONE"
+                                            viewModel.setWorkoutStatus(w.id, if (wasDone) "PLANNED" else "DONE")
+                                            scope.launch {
+                                                val result = snackbarHostState.showSnackbar(
+                                                    message = if (wasDone) "Возвращено в план" else "Отмечено выполненной",
+                                                    actionLabel = "Отменить",
+                                                    duration = SnackbarDuration.Short
+                                                )
+                                                if (result == SnackbarResult.ActionPerformed) {
+                                                    viewModel.setWorkoutStatus(w.id, if (wasDone) "DONE" else "PLANNED")
+                                                }
+                                            }
+                                        }) {
+                                            Icon(
+                                                if (isDone) Icons.Default.CheckCircle else Icons.Default.Check,
+                                                contentDescription = if (isDone) "Вернуть в план" else "Отметить выполненной",
+                                                tint = if (isDone) StatusDone else StatusPlanned
+                                            )
+                                        }
                                     }
                                 }
                             }
