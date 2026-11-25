@@ -14,6 +14,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -22,6 +23,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.trainerapp.data.local.AppSettings
 import com.example.trainerapp.ui.screens.ClientDetailScreen
 import com.example.trainerapp.ui.screens.ClientHistoryScreen
 import com.example.trainerapp.ui.screens.ClientProgramDetailScreen
@@ -29,6 +31,7 @@ import com.example.trainerapp.ui.screens.ClientScreen
 import com.example.trainerapp.ui.screens.ClientWorkoutLogScreen
 import com.example.trainerapp.ui.screens.DashboardScreen
 import com.example.trainerapp.ui.screens.MacroDetailScreen
+import com.example.trainerapp.ui.screens.SettingsScreen
 import com.example.trainerapp.ui.screens.TemplateScreen
 import com.example.trainerapp.ui.screens.WorkoutDetailScreen
 import com.example.trainerapp.ui.theme.TrainerAppTheme
@@ -37,8 +40,11 @@ import java.net.URLEncoder
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Загружаем сохранённую тему до setContent, чтобы не мигнуть дефолтной
+        AppSettings.init(this)
         setContent {
-            TrainerAppTheme {
+            val themeMode by AppSettings.theme.collectAsState()
+            TrainerAppTheme(themeMode = themeMode) {
                 MainScreen()
             }
         }
@@ -92,8 +98,12 @@ fun MainScreen() {
                 DashboardScreen(
                     onWorkoutClick = { workoutId, workoutName ->
                         navController.navigate("workout_log/$workoutId/${URLEncoder.encode(workoutName, "UTF-8")}")
-                    }
+                    },
+                    onSettingsClick = { navController.navigate("settings") }
                 )
+            }
+            composable("settings") {
+                SettingsScreen(onBackClick = { navController.popBackStack() })
             }
             composable("clients") {
                 ClientScreen(
