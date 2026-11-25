@@ -14,7 +14,7 @@ import com.example.trainerapp.data.model.*
         TemplateExercise::class, ClientProgram::class, ClientWorkout::class,
         ClientExercise::class, ExerciseLog::class
     ],
-    version = 10,
+    version = 11,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -71,6 +71,16 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // Протоколы меткона: поля добавляются с дефолтами, старые данные не трогаем.
+        private val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE exercise_blocks ADD COLUMN protocol TEXT NOT NULL DEFAULT 'NONE'")
+                db.execSQL("ALTER TABLE exercise_blocks ADD COLUMN protocolValue TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE client_exercises ADD COLUMN protocol TEXT NOT NULL DEFAULT 'NONE'")
+                db.execSQL("ALTER TABLE client_exercises ADD COLUMN protocolValue TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -78,7 +88,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "fitness_database"
                 )
-                    .addMigrations(MIGRATION_9_10)
+                    .addMigrations(MIGRATION_9_10, MIGRATION_10_11)
                     .build()
                 INSTANCE = instance
                 instance
