@@ -42,13 +42,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Временный перехватчик крашей: пишет стек в файл в «Загрузки»,
-        // чтобы можно было вытащить причину падения без adb. Уберём после отладки.
+        // Временный перехватчик крашей: пишет стек в «Загрузки»,
+        // чтобы вытащить причину падения без adb. Уберём после отладки.
         Thread.setDefaultUncaughtExceptionHandler { t, e ->
             try {
                 val text = "Thread: ${t.name}\n\n" + android.util.Log.getStackTraceString(e)
-
-                // Копия в общую папку «Загрузки» — видна любым файловым менеджером
                 val values = android.content.ContentValues().apply {
                     put(android.provider.MediaStore.Downloads.DISPLAY_NAME, "crash_trainerapp.txt")
                     put(android.provider.MediaStore.Downloads.MIME_TYPE, "text/plain")
@@ -89,7 +87,7 @@ fun MainScreen() {
     )
 
     val backStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = backStackEntry.isRootRoute
+    val currentRoute = backStackEntry?.destination?.route
     val showBottomBar = bottomItems.any { it.route == currentRoute }
 
     Scaffold(
@@ -177,7 +175,7 @@ fun MainScreen() {
             composable("client_program/{programId}/{programName}") { entry ->
                 val programId = entry.arguments?.getString("programId")?.toLongOrNull()
                     ?: return@composable
-                val programName = entry.arguments?.getString("programName) ?: ""
+                val programName = entry.arguments?.getString("programName") ?: ""
                 ClientProgramDetailScreen(
                     programId = programId,
                     programName = programName,
@@ -187,7 +185,44 @@ fun MainScreen() {
                     }
                 )
             }
-            ...
+            composable("workout_log/{workoutId}/{workoutName}") { entry ->
+                val workoutId = entry.arguments?.getString("workoutId")?.toLongOrNull()
+                    ?: return@composable
+                val workoutName = entry.arguments?.getString("workoutName") ?: ""
+                ClientWorkoutLogScreen(
+                    workoutId = workoutId,
+                    workoutName = workoutName,
+                    onBackClick = { navController.popBackStack() }
+                )
+            }
+            composable("workout_detail/{workoutId}/{workoutName}") { entry ->
+                val workoutId = entry.arguments?.getString("workoutId")?.toLongOrNull()
+                    ?: return@composable
+                val workoutName = entry.arguments?.getString("workoutName") ?: ""
+                WorkoutDetailScreen(
+                    workoutId = workoutId,
+                    workoutName = workoutName,
+                    onBackClick = { navController.popBackStack() }
+                )
+            }
+            composable("history/{clientId}") { entry ->
+                val clientId = entry.arguments?.getString("clientId")?.toLongOrNull()
+                    ?: return@composable
+                ClientHistoryScreen(
+                    clientId = clientId,
+                    onBackClick = { navController.popBackStack() }
+                )
+            }
+            composable("client_measurements/{clientId}/{clientName}") { entry ->
+                val clientId = entry.arguments?.getString("clientId")?.toLongOrNull()
+                    ?: return@composable
+                val clientName = entry.arguments?.getString("clientName") ?: ""
+                ClientMeasurementsScreen(
+                    clientId = clientId,
+                    clientName = clientName,
+                    onBackClick = { navController.popBackStack() }
+                )
+            }
         }
     }
 }
