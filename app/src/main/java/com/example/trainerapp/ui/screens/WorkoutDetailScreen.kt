@@ -33,6 +33,17 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import androidx.compose.material.icons.filled.ViewModule
+import com.example.trainerapp.ui.components.EmptyState
+
+if (blocks.isEmpty()) {
+    EmptyState(
+        icon = Icons.Default.ViewModule,
+        title = "Тренировка пуста",
+        subtitle = "Добавьте первый блок: разминка, силовая или меткон — через «+» сверху."
+    )
+} else { LazyColumn { /* как было */ } }
+
 
 class WorkoutDetailViewModel(application: Application, val workoutId: Long) : AndroidViewModel(application) {
     private val dao = AppDatabase.getDatabase(application).appDao()
