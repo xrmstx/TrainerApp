@@ -24,6 +24,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.room.withTransaction
 import com.example.trainerapp.data.local.AppDatabase
 import com.example.trainerapp.data.model.*
+import com.example.trainerapp.ui.components.EmptyState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -280,7 +281,7 @@ fun ClientDetailScreen(
                                 shape = RoundedCornerShape(12.dp)
                             ) {
                                 Text(
-                                    text = "${macro.name} · ${macro.durationWeeks} нед.",
+                                    text = "${macro.name} · ${macro.durationWeeks} нед. · ${macro.sessionsPerWeek} трен./нед.",
                                     modifier = Modifier.padding(16.dp),
                                     style = MaterialTheme.typography.titleMedium
                                 )
@@ -397,15 +398,13 @@ fun ClientDetailScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             if (programs.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "Нет назначенных программ",
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-                    )
-                }
+                EmptyState(
+                    icon = Icons.Default.FolderOpen,
+                    title = "Пока нет программ",
+                    subtitle = "Назначьте клиенту шаблон — он появится здесь с недельным планом.",
+                    actionLabel = "Назначить программу",
+                    onAction = { viewModel.openDialog() }
+                )
             } else {
                 LazyColumn {
                     items(programs, key = { it.id }) { program ->
