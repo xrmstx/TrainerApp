@@ -2,6 +2,16 @@ package com.example.trainerapp.ui.screens
 
 import android.app.Application
 import android.content.Intent
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
@@ -14,12 +24,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -34,69 +46,11 @@ import com.example.trainerapp.data.model.ExerciseBlock
 import com.example.trainerapp.data.model.Macrocycle
 import com.example.trainerapp.data.model.TemplateExercise
 import com.example.trainerapp.data.model.Workout
+import com.example.trainerapp.ui.components.EmptyState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import androidx.compose.material.icons.filled.FitnessCenter
-import com.example.trainerapp.ui.components.EmptyState
-import androidx.compose.animation.*
-import androidx.compose.animation.core.tween
-
-// внутри Column, где раньше был if/else с LazyColumn:
-AnimatedContent(
-    targetState = currentWeek,
-    transitionSpec = {
-        // Перелистывание: неделя вправо — содержимое уезжает вправо, приходит слева, и наоборот
-        if (targetState > initialState) {
-            (slideInHorizontally(tween(300)) { it / 4 } + fadeIn(tween(300))) togetherWith
-                (slideOutHorizontally(tween(300)) { -it / 4 } + fadeOut(tween(300)))
-        } else {
-            (slideInHorizontally(tween(300)) { -it / 4 } + fadeIn(tween(300))) togetherWith
-                (slideOutHorizontally(tween(300)) { it / 4 } + fadeOut(tween(300)))
-        }
-    },
-    label = "weekContent"
-) { week ->
-    val weekWorkouts = allWorkouts.filter { it.weekNumber == week }.sortedBy { it.dayNumber }
-    if (weekWorkouts.isEmpty()) {
-        EmptyState(
-            icon = Icons.Default.FitnessCenter,
-            title = "Неделя $week пуста",
-            subtitle = if (week > 1) "Скопируйте предыдущую неделю с прогрессией или добавьте дни вручную"
-                       else "Добавьте первый день через «+» внизу",
-            actionLabel = if (week > 1) null else "Добавить день",
-            onAction = if (week > 1) null else ({ viewModel.openDialog() })
-        )
-    } else {
-        LazyColumn {
-            items(weekWorkouts, key = { it.id }) { workout ->
-                // карточка тренировки — как было
-            }
-        }
-    }
-}
-
-
-// было:
-if (weekWorkouts.isEmpty()) {
-    Box(...) { Text("Неделя $currentWeek пуста....") }
-} else { LazyColumn { ... } }
-
-// стало:
-if (weekWorkouts.isEmpty()) {
-    EmptyState(
-        icon = Icons.Default.FitnessCenter,
-        title = "Неделя $currentWeek пуста",
-        subtitle = if (currentWeek > 1) "Скопируйте предыдущую неделю с прогрессией или добавьте дни вручную"
-                   else "Добавьте первый день через «+» внизу",
-        actionLabel = if (currentWeek > 1) null else "Добавить день",
-        onAction = if (currentWeek > 1) null else ({ viewModel.openDialog() })
-    )
-} else {
-    LazyColumn { /* как было */ }
-}
-
 
 class MacroDetailViewModel(application: Application, val macroId: Long) : AndroidViewModel(application) {
     private val dao = AppDatabase.getDatabase(application).appDao()
@@ -447,10 +401,23 @@ fun MacroDetailScreen(macroId: Long, macroName: String, onBackClick: () -> Unit,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 (1..maxOf(maxWeek, 1)).forEach { week ->
+                    // Пружинка: выбранный чип чуть крупнее
+                    val chipScale by animateFloatAsState(
+                        targetValue = if (week == currentWeek) 1f else 0.94f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        ),
+                        label = "chipScale$week"
+                    )
                     FilterChip(
                         selected = week == currentWeek,
                         onClick = { viewModel.onWeekChange(week) },
-                        label = { Text(if (week in weekNumbers) "Нед. $week" else "Нед. $week +") }
+                        label = { Text(if (week in weekNumbers) "Нед. $week" else "Нед. $week +") },
+                        modifier = Modifier.graphicsLayer {
+                            scaleX = chipScale
+                            scaleY = chipScale
+                        }
                     )
                 }
             }
@@ -471,46 +438,67 @@ fun MacroDetailScreen(macroId: Long, macroName: String, onBackClick: () -> Unit,
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            if (weekWorkouts.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        "Неделя $currentWeek пуста.\nДобавьте дни через «+» или скопируйте предыдущую неделю.",
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                        modifier = Modifier.padding(16.dp)
+            // Содержимое недели с анимацией перелистывания
+            AnimatedContent(
+                targetState = currentWeek,
+                modifier = Modifier.weight(1f),
+                transitionSpec = {
+                    // Перелистывание: неделя вправо — содержимое уезжает влево, приходит справа, и наоборот
+                    if (targetState > initialState) {
+                        (slideInHorizontally(tween(300)) { it / 4 } + fadeIn(tween(300))) togetherWith
+                            (slideOutHorizontally(tween(300)) { -it / 4 } + fadeOut(tween(300)))
+                    } else {
+                        (slideInHorizontally(tween(300)) { -it / 4 } + fadeIn(tween(300))) togetherWith
+                            (slideOutHorizontally(tween(300)) { it / 4 } + fadeOut(tween(300)))
+                    }
+                },
+                label = "weekContent"
+            ) { week ->
+                // Внутри лямбды используем параметр week, а не currentWeek из замыкания
+                val contentWorkouts = allWorkouts.filter { it.weekNumber == week }.sortedBy { it.dayNumber }
+
+                if (contentWorkouts.isEmpty()) {
+                    EmptyState(
+                        icon = Icons.Default.FitnessCenter,
+                        title = "Неделя $week пуста",
+                        subtitle = if (week > 1) "Скопируйте предыдущую неделю с прогрессией или добавьте дни вручную"
+                                   else "Добавьте первый день через «+» внизу",
+                        actionLabel = if (week > 1) null else "Добавить день",
+                        onAction = if (week > 1) null else ({ viewModel.openDialog() })
                     )
-                }
-            } else {
-                LazyColumn {
-                    items(weekWorkouts, key = { it.id }) { workout ->
-                        val isRecovery = workout.dayType == "RECOVERY"
-                        Card(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp).combinedClickable(
-                                onClick = { onWorkoutClick(workout.id, workout.name) },
-                                onLongClick = { workoutToDelete = workout }
-                            ),
-                            shape = RoundedCornerShape(16.dp),
-                            elevation = CardDefaults.cardElevation(2.dp)
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    if (isRecovery) {
-                                        Icon(
-                                            Icons.Default.SelfImprovement,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.tertiary,
-                                            modifier = Modifier.size(20.dp)
+                } else {
+                    LazyColumn {
+                        items(contentWorkouts, key = { it.id }) { workout ->
+                            val isRecovery = workout.dayType == "RECOVERY"
+                            Card(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp).combinedClickable(
+                                    onClick = { onWorkoutClick(workout.id, workout.name) },
+                                    onLongClick = { workoutToDelete = workout }
+                                ),
+                                shape = RoundedCornerShape(16.dp),
+                                elevation = CardDefaults.cardElevation(2.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        if (isRecovery) {
+                                            Icon(
+                                                Icons.Default.SelfImprovement,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.tertiary,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                        }
+                                        Text(
+                                            if (isRecovery) "Восстановительный день" else "День ${workout.dayNumber}",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = if (isRecovery) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Bold
                                         )
-                                        Spacer(modifier = Modifier.width(6.dp))
                                     }
-                                    Text(
-                                        if (isRecovery) "Восстановительный день" else "День ${workout.dayNumber}",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = if (isRecovery) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(workout.name, style = MaterialTheme.typography.titleMedium)
                                 }
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(workout.name, style = MaterialTheme.typography.titleMedium)
                             }
                         }
                     }
