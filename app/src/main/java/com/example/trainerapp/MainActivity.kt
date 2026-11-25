@@ -3,12 +3,15 @@ package com.example.trainerapp
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -16,9 +19,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavHostController
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -42,8 +47,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Временный перехватчик крашей: пишет стек в «Загрузки»,
-        // чтобы вытащить причину падения без adb. Уберём после отладки.
+        // Временный перехватчик крашей: пишет стек в «Загрузки».
+        // Уберём после отладки.
         Thread.setDefaultUncaughtExceptionHandler { t, e ->
             try {
                 val text = "Thread: ${t.name}\n\n" + android.util.Log.getStackTraceString(e)
@@ -75,6 +80,19 @@ class MainActivity : ComponentActivity() {
 }
 
 private data class BottomItem(val route: String, val label: String, val icon: ImageVector)
+
+private fun NavBackStackEntry.longArg(name: String): Long? =
+    arguments?.getString(name)?.toLongOrNull()
+
+private fun encodeArg(text: String): String =
+    URLEncoder.encode(text, "UTF-8")
+
+@Composable
+private fun InvalidScreen(message: String) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text(message, color = MaterialTheme.colorScheme.error)
+    }
+}
 
 @Composable
 fun MainScreen() {
@@ -120,7 +138,7 @@ fun MainScreen() {
             composable("dashboard") {
                 DashboardScreen(
                     onWorkoutClick = { workoutId, workoutName ->
-                        navController.navigate("workout_log/$workoutId/${URLEncoder.encode(workoutName, "UTF-8")}")
+                        navController.navigate("workout_log/$workoutId/${encodeArg(workoutName)}")
                     },
                     onSettingsClick = { navController.navigate("settings") }
                 )
@@ -138,90 +156,111 @@ fun MainScreen() {
             composable("templates") {
                 TemplateScreen(
                     onMacroClick = { macroId, macroName ->
-                        navController.navigate("macro_detail/$macroId/${URLEncoder.encode(macroName, "UTF-8")}")
+                        navController.navigate("macro_detail/$macroId/${encodeArg(macroName)}")
                     }
                 )
             }
             composable("macro_detail/{macroId}/{macroName}") { entry ->
-                val macroId = entry.arguments?.getString("macroId")?.toLongOrNull()
-                    ?: return@composable
+                val macroId = entry.longArg("macroId")
                 val macroName = entry.arguments?.getString("macroName") ?: ""
-                MacroDetailScreen(
-                    macroId = macroId,
-                    macroName = macroName,
-                    onBackClick = { navController.popBackStack() },
-                    onWorkoutClick = { workoutId, workoutName ->
-                        navController.navigate("workout_detail/$workoutId/${URLEncoder.encode(workoutName, "UTF-8")}")
-                    }
-                )
+                if (macroId == null) {
+                    InvalidScreen("Ошибка навигации")
+                } else {
+                    MacroDetailScreen(
+                        macroId = macroId,
+                        macroName = macroName,
+                        onBackClick = { navController.popBackStack() },
+                        onWorkoutClick = { workoutId, workoutName ->
+                            navController.navigate("workout_detail/$workoutId/${encodeArg(workoutName)}")
+                        }
+                    )
+                }
             }
             composable("client/{clientId}") { entry ->
-                val clientId = entry.arguments?.getString("clientId")?.toLongOrNull()
-                    ?: return@composable
-                ClientDetailScreen(
-                    clientId = clientId,
-                    onBackClick = { navController.popBackStack() },
-                    onProgramClick = { programId, programName ->
-                        navController.navigate("client_program/$programId/${URLEncoder.encode(programName, "UTF-8")}")
-                    },
-                    onHistoryClick = {
-                        navController.navigate("history/$clientId")
-                    },
-                    onMeasurementsClick = { clientId, clientName ->
-                        navController.navigate("client_measurements/$clientId/${URLEncoder.encode(clientName, "UTF-8")}")
-                    }
-                )
+                val clientId = entry.longArg("clientId")
+                if (clientId == null) {
+                    InvalidScreen("Ошибка навигации")
+                } else {
+                    ClientDetailScreen(
+                        clientId = clientId,
+                        onBackClick = { navController.popBackStack() },
+                        onProgramClick = { programId, programName ->
+                            navController.navigate("client_program/$programId/${encodeArg(programName)}")
+                        },
+                        onHistoryClick = {
+                            navController.navigate("history/$clientId")
+                        },
+                        onMeasurementsClick = { cid, clientName ->
+                            navController.navigate("client_measurements/$cid/${encodeArg(clientName)}")
+                        }
+                    )
+                }
             }
             composable("client_program/{programId}/{programName}") { entry ->
-                val programId = entry.arguments?.getString("programId")?.toLongOrNull()
-                    ?: return@composable
+                val programId = entry.longArg("programId")
                 val programName = entry.arguments?.getString("programName") ?: ""
-                ClientProgramDetailScreen(
-                    programId = programId,
-                    programName = programName,
-                    onBackClick = { navController.popBackStack() },
-                    onWorkoutClick = { workoutId, workoutName ->
-                        navController.navigate("workout_log/$workoutId/${URLEncoder.encode(workoutName, "UTF-8")}")
-                    }
-                )
+                if (programId == null) {
+                    InvalidScreen("Ошибка навигации")
+                } else {
+                    ClientProgramDetailScreen(
+                        programId = programId,
+                        programName = programName,
+                        onBackClick = { navController.popBackStack() },
+                        onWorkoutClick = { workoutId, workoutName ->
+                            navController.navigate("workout_log/$workoutId/${encodeArg(workoutName)}")
+                        }
+                    )
+                }
             }
             composable("workout_log/{workoutId}/{workoutName}") { entry ->
-                val workoutId = entry.arguments?.getString("workoutId")?.toLongOrNull()
-                    ?: return@composable
+                val workoutId = entry.longArg("workoutId")
                 val workoutName = entry.arguments?.getString("workoutName") ?: ""
-                ClientWorkoutLogScreen(
-                    workoutId = workoutId,
-                    workoutName = workoutName,
-                    onBackClick = { navController.popBackStack() }
-                )
+                if (workoutId == null) {
+                    InvalidScreen("Ошибка навигации")
+                } else {
+                    ClientWorkoutLogScreen(
+                        workoutId = workoutId,
+                        workoutName = workoutName,
+                        onBackClick = { navController.popBackStack() }
+                    )
+                }
             }
             composable("workout_detail/{workoutId}/{workoutName}") { entry ->
-                val workoutId = entry.arguments?.getString("workoutId")?.toLongOrNull()
-                    ?: return@composable
+                val workoutId = entry.longArg("workoutId")
                 val workoutName = entry.arguments?.getString("workoutName") ?: ""
-                WorkoutDetailScreen(
-                    workoutId = workoutId,
-                    workoutName = workoutName,
-                    onBackClick = { navController.popBackStack() }
-                )
+                if (workoutId == null) {
+                    InvalidScreen("Ошибка навигации")
+                } else {
+                    WorkoutDetailScreen(
+                        workoutId = workoutId,
+                        workoutName = workoutName,
+                        onBackClick = { navController.popBackStack() }
+                    )
+                }
             }
             composable("history/{clientId}") { entry ->
-                val clientId = entry.arguments?.getString("clientId")?.toLongOrNull()
-                    ?: return@composable
-                ClientHistoryScreen(
-                    clientId = clientId,
-                    onBackClick = { navController.popBackStack() }
-                )
+                val clientId = entry.longArg("clientId")
+                if (clientId == null) {
+                    InvalidScreen("Ошибка навигации")
+                } else {
+                    ClientHistoryScreen(
+                        clientId = clientId,
+                        onBackClick = { navController.popBackStack() }
+                    )
+                }
             }
             composable("client_measurements/{clientId}/{clientName}") { entry ->
-                val clientId = entry.arguments?.getString("clientId")?.toLongOrNull()
-                    ?: return@composable
+                val clientId = entry.longArg("clientId")
                 val clientName = entry.arguments?.getString("clientName") ?: ""
-                ClientMeasurementsScreen(
-                    clientId = clientId,
-                    clientName = clientName,
-                    onBackClick = { navController.popBackStack() }
-                )
+                if (clientId == null) {
+                    InvalidScreen("Ошибка навигации")
+                } else {
+                    ClientMeasurementsScreen(
+                        clientId = clientId,
+                        clientName = clientName,
+                        onBackClick = { navController.popBackStack() }
+                    )
+                }
             }
         }
     }
