@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,6 +21,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.trainerapp.data.local.AppDatabase
+import com.example.trainerapp.ui.components.EmptyState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -160,12 +162,11 @@ fun ClientHistoryScreen(clientId: Long, onBackClick: () -> Unit) {
             }
 
             if (sessions.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        "Записей пока нет.\nКак только клиент отметит подходы в тренировках, они появятся здесь.",
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-                    )
-                }
+                EmptyState(
+                    icon = Icons.Default.History,
+                    title = "Записей пока нет",
+                    subtitle = "Как только клиент отметит подходы в тренировках, они появятся здесь."
+                )
             } else {
                 LazyColumn(contentPadding = PaddingValues(16.dp)) {
                     item(key = "summary") {
