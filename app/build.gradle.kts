@@ -50,6 +50,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
@@ -58,7 +59,3 @@ dependencies {
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
-
-// Если решите поднять BOM (необязательно, но желательно):
-// замените 2023.08.00, например, на 2024.06.00 —
-// при kotlinCompilerExtensionVersion 1.5.8 нужен Kotlin 1.9.22, проверьте версию в корневом build.gradle.kts
