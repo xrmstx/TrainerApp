@@ -1,6 +1,7 @@
 package com.example.trainerapp.ui.screens
 
 import android.app.Application
+import android.content.Intent
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -12,6 +13,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.SelfImprovement
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,6 +28,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.trainerapp.data.local.AppDatabase
 import com.example.trainerapp.data.model.ClientProgram
+import com.example.trainerapp.data.model.ClientWorkout
 import com.example.trainerapp.ui.theme.StatusDone
 import com.example.trainerapp.ui.theme.StatusPlanned
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -63,6 +66,66 @@ class ClientProgramDetailViewModel(application: Application, private val program
             )
         }
     }
+
+    /**
+     * Готовит текст одной тренировки для отправки клиенту в мессенджере.
+     * Блоки восстанавливаются группировкой по blockOrder — так же, как при копировании шаблона.
+     */
+    fun shareWorkout(workout: ClientWorkout, onReady: (String) -> Unit) {
+        viewModelScope.launch {
+            val exercises = dao.getClientExercisesSync(workout.id)
+            val isRecovery = workout.dayType == "RECOVERY"
+            val header = if (isRecovery) "Восстановление" else "День ${workout.dayNumber}"
+
+            val text = if (exercises.isEmpty()) {
+                buildString {
+                    appendLine("🏋️ Неделя ${workout.weekNumber} · $header: ${workout.name}")
+                    appendLine()
+                    appendLine("(тренировка без упражнений)")
+                }
+            } else {
+                buildString {
+                    appendLine("🏋️ Неделя ${workout.weekNumber} · $header: ${workout.name}")
+                    appendLine()
+                    exercises
+                        .groupBy { it.blockOrder }
+                        .toSortedMap()
+                        .forEach { (_, blockExercises) ->
+                            val first = blockExercises.first()
+                            appendLine("━━ ${first.blockTitle}")
+                            // Бейдж протокола меткона — только у Circuit-блоков
+                            if (first.blockType == "CIRCUIT" && first.protocol != "NONE") {
+                                val badge = when (first.protocol) {
+                                    "AMRAP" -> "AMRAP ${first.protocolValue} мин"
+                                    "EMOM" -> "EMOM ${first.protocolValue} мин"
+                                    "FOR_TIME" -> "For Time" + (if (first.protocolValue.isNotBlank()) " ${first.protocolValue}" else "")
+                                    "RFT" -> "RFT ${first.protocolValue}"
+                                    "TABATA" -> "Tabata ${first.protocolValue}"
+                                    "CUSTOM" -> if (first.protocolValue.isNotBlank()) first.protocolValue else "Своя схема"
+                                    else -> null
+                                }
+                                if (badge != null) appendLine("    $badge")
+                            }
+                            blockExercises.sortedBy { it.order }.forEach { ex ->
+                                val plan = if (ex.targetSets == 0) {
+                                    if (ex.targetReps.isBlank()) "" else ex.targetReps
+                                } else "${ex.targetSets}×${ex.targetReps}"
+                                val weightText = ex.targetWeight?.let { w ->
+                                    val formatted = if (w == w.toLong().toDouble()) w.toLong().toString() else w.toString()
+                                    " · $formatted кг"
+                                } ?: ""
+                                val planText = if (plan.isBlank()) weightText.trimStart(' ', '·')
+                                else "$plan$weightText"
+                                appendLine("• ${ex.exerciseName}" + (if (planText.isBlank()) "" else " — $planText"))
+                                ex.note?.takeIf { it.isNotBlank() }?.let { appendLine("  $it") }
+                            }
+                            appendLine()
+                        }
+                }
+            }
+            onReady(text)
+        }
+    }
 }
 
 class ClientProgramDetailViewModelFactory(
@@ -88,6 +151,7 @@ fun ClientProgramDetailScreen(
     val application = LocalContext.current.applicationContext as Application
     val viewModel: ClientProgramDetailViewModel =
         viewModel(factory = ClientProgramDetailViewModelFactory(application, programId))
+    val context = LocalContext.current
 
     val program by viewModel.program.collectAsState()
     val workouts by viewModel.workouts.collectAsState(initial = emptyList())
@@ -134,7 +198,6 @@ fun ClientProgramDetailScreen(
                     (1..totalWeeks).forEach { week ->
                         val weekDoneCount = workouts.count { it.weekNumber == week && it.status == "DONE" }
                         val weekTotal = workouts.count { it.weekNumber == week }
-                        val isPast = program?.let { week < it.weekNumber } ?: false
                         FilterChip(
                             selected = week == activeWeek,
                             onClick = { viewModel.onWeekChange(week) },
@@ -243,6 +306,24 @@ fun ClientProgramDetailScreen(
                                             else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                                         )
                                     }
+                                }
+                                // Отправить тренировку клиенту в мессенджер
+                                IconButton(onClick = {
+                                    viewModel.shareWorkout(w) { text ->
+                                        val sendIntent = Intent().apply {
+                                            action = Intent.ACTION_SEND
+                                            putExtra(Intent.EXTRA_TEXT, text)
+                                            type = "text/plain"
+                                        }
+                                        context.startActivity(
+                                            Intent.createChooser(sendIntent, "Отправить тренировку")
+                                        )
+                                    }
+                                }) {
+                                    Icon(
+                                        Icons.Default.Share,
+                                        contentDescription = "Отправить тренировку клиенту"
+                                    )
                                 }
                                 IconButton(onClick = { viewModel.toggleStatus(w.id, w.status) }) {
                                     Icon(
