@@ -1,12 +1,14 @@
 package com.example.trainerapp.ui.screens
 
-import android.app.Application  // Добавляем эту строку
+import android.app.Application
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.EventNote
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -22,13 +24,13 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.trainerapp.data.local.AppDatabase
 import com.example.trainerapp.data.model.TodayWorkout
-import com.example.trainerapp.ui.theme.*  // Импорт цветов
+import com.example.trainerapp.ui.components.EmptyState
+import com.example.trainerapp.ui.theme.StatusDone
+import com.example.trainerapp.ui.theme.StatusPlanned
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-
-
 
 class DashboardViewModel(application: Application) : AndroidViewModel(application) {
     private val dao = AppDatabase.getDatabase(application).appDao()
@@ -66,6 +68,19 @@ class DashboardViewModelFactory(private val application: Application) : ViewMode
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }
+}
+
+// Русские формы: 1 тренировка, 2 тренировки, 5 тренировок
+private fun plural(n: Int, one: String, few: String, many: String) = when {
+    n % 10 == 1 && n % 100 != 11 -> one
+    n % 10 in 2..4 && (n % 100 < 10 || n % 100 >= 20) -> few
+    else -> many
+}
+
+// Локальная обёртка над семантическими цветами из темы
+private fun statusColor(status: String) = when (status) {
+    "DONE" -> StatusDone
+    else -> StatusPlanned
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -110,7 +125,7 @@ fun DashboardScreen(onWorkoutClick: (Long, String) -> Unit) {
                             color = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            if (workouts.size == 1) "тренировка в плане" else "тренировок в плане",
+                            "${plural(workouts.size, "тренировка", "тренировки", "тренировок")} в плане",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
@@ -129,7 +144,7 @@ fun DashboardScreen(onWorkoutClick: (Long, String) -> Unit) {
                             color = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            if (clientsCount == 1) "клиент" else "клиентов",
+                            plural(clientsCount, "клиент", "клиента", "клиентов"),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
@@ -146,21 +161,11 @@ fun DashboardScreen(onWorkoutClick: (Long, String) -> Unit) {
                     }
                 }
                 workouts.isEmpty() -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                "Тренировок в плане нет",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                "Назначьте программу клиенту —\nеё незакрытые дни появятся здесь.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
-                            )
-                        }
-                    }
+                    EmptyState(
+                        icon = Icons.Default.EventNote,
+                        title = "Тренировок в плане нет",
+                        subtitle = "Назначьте программу клиенту — её незакрытые дни появятся здесь."
+                    )
                 }
                 else -> {
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -177,16 +182,11 @@ fun DashboardScreen(onWorkoutClick: (Long, String) -> Unit) {
                                     modifier = Modifier.padding(16.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Box(
+                                    Surface(
                                         modifier = Modifier.size(12.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Surface(
-                                            modifier = Modifier.size(12.dp),
-                                            shape = CircleShape,
-                                            color = statusColor(item.status)
-                                        ) {}
-                                    }
+                                        shape = CircleShape,
+                                        color = statusColor(item.status)
+                                    ) {}
                                     Spacer(modifier = Modifier.width(12.dp))
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
@@ -212,10 +212,4 @@ fun DashboardScreen(onWorkoutClick: (Long, String) -> Unit) {
             }
         }
     }
-}
-
-// Локальная обёртка над семантическими цветами из темы
-private fun statusColor(status: String) = when (status) {
-    "DONE" -> StatusDone
-    else -> StatusPlanned
 }
