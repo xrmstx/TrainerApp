@@ -29,21 +29,11 @@ import com.example.trainerapp.data.model.ExerciseBlock
 import com.example.trainerapp.data.model.TemplateExercise
 import com.example.trainerapp.data.library.ExerciseLibraryRegistry
 import com.example.trainerapp.data.library.LibraryEntry
+import com.example.trainerapp.ui.components.EmptyState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import androidx.compose.material.icons.filled.ViewModule
-import com.example.trainerapp.ui.components.EmptyState
-
-if (blocks.isEmpty()) {
-    EmptyState(
-        icon = Icons.Default.ViewModule,
-        title = "Тренировка пуста",
-        subtitle = "Добавьте первый блок: разминка, силовая или меткон — через «+» сверху."
-    )
-} else { LazyColumn { /* как было */ } }
-
 
 class WorkoutDetailViewModel(application: Application, val workoutId: Long) : AndroidViewModel(application) {
     private val dao = AppDatabase.getDatabase(application).appDao()
@@ -562,6 +552,7 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
             confirmButton = { TextButton(onClick = { viewModel.closeLibrary() }) { Text("Закрыть") } }
         )
     }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -577,9 +568,11 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
     ) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)) {
             if (blocks.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Добавьте первый блок через «+» сверху.", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f))
-                }
+                EmptyState(
+                    icon = Icons.Default.ViewModule,
+                    title = "Тренировка пуста",
+                    subtitle = "Добавьте первый блок: разминка, силовая или меткон — через «+» сверху."
+                )
             } else {
                 LazyColumn {
                     items(blocks, key = { it.id }) { block ->
