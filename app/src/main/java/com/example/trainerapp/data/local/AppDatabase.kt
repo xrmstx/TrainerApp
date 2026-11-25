@@ -14,7 +14,7 @@ import com.example.trainerapp.data.model.*
         TemplateExercise::class, ClientProgram::class, ClientWorkout::class,
         ClientExercise::class, ExerciseLog::class
     ],
-    version = 11,
+    version = 12,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -81,6 +81,18 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // Недельная структура: weekNumber у тренировок шаблона и клиента,
+        // dayType (TRAINING / RECOVERY) и sessionsPerWeek у макроцикла.
+        private val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE workouts ADD COLUMN weekNumber INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE workouts ADD COLUMN dayType TEXT NOT NULL DEFAULT 'TRAINING'")
+                db.execSQL("ALTER TABLE client_workouts ADD COLUMN weekNumber INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE client_workouts ADD COLUMN dayType TEXT NOT NULL DEFAULT 'TRAINING'")
+                db.execSQL("ALTER TABLE macrocycles ADD COLUMN sessionsPerWeek INTEGER NOT NULL DEFAULT 3")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -88,7 +100,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "fitness_database"
                 )
-                    .addMigrations(MIGRATION_9_10, MIGRATION_10_11)
+                    .addMigrations(MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12)
                     .build()
                 INSTANCE = instance
                 instance
