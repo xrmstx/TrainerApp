@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,18 +19,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.trainerapp.data.model.Macrocycle
-import com.example.trainerapp.ui.viewmodel.TemplateViewModel
-import androidx.compose.material.icons.filled.Assignment
 import com.example.trainerapp.ui.components.EmptyState
-
-if (macrocycles.isEmpty()) {
-    EmptyState(
-        icon = Icons.Default.Assignment,
-        title = "Нет шаблонов",
-        subtitle = "Создайте первый шаблон: название, длительность и число тренировок в неделю — неделя 1 сгенерируется сама."
-    )
-} else { LazyColumn { /* как было */ } }
-
+import com.example.trainerapp.ui.viewmodel.TemplateViewModel
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -105,9 +96,11 @@ fun TemplateScreen(onMacroClick: (Long, String) -> Unit, viewModel: TemplateView
             }
             Spacer(modifier = Modifier.height(16.dp))
             if (macrocycles.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Нет шаблонов. Создайте первый!", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f))
-                }
+                EmptyState(
+                    icon = Icons.Default.Assignment,
+                    title = "Нет шаблонов",
+                    subtitle = "Создайте первый шаблон: название, длительность и число тренировок в неделю — неделя 1 сгенерируется сама."
+                )
             } else {
                 LazyColumn {
                     items(macrocycles, key = { it.id }) { macro ->
