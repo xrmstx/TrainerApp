@@ -3,6 +3,11 @@ package com.example.trainerapp
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -17,11 +22,16 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 import androidx.navigation.NavHostController
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.compose.NavHost
@@ -40,7 +50,9 @@ import com.example.trainerapp.ui.screens.MacroDetailScreen
 import com.example.trainerapp.ui.screens.SettingsScreen
 import com.example.trainerapp.ui.screens.TemplateScreen
 import com.example.trainerapp.ui.screens.WorkoutDetailScreen
+import com.example.trainerapp.ui.theme.ThemeMode
 import com.example.trainerapp.ui.theme.TrainerAppTheme
+import com.example.trainerapp.ui.theme.colorSchemeFor
 import java.net.URLEncoder
 
 class MainActivity : ComponentActivity() {
@@ -72,6 +84,22 @@ class MainActivity : ComponentActivity() {
         AppSettings.init(this)
         setContent {
             val themeMode by AppSettings.theme.collectAsState()
+            val scheme = colorSchemeFor(themeMode)
+            val view = LocalView.current
+
+            // Статус-бар и навигационная панель — в цвет фона текущей темы
+            LaunchedEffect(themeMode) {
+                window.statusBarColor = scheme.background.toArgb()
+                window.navigationBarColor = scheme.background.toArgb()
+            }
+            // Цвет иконок статус-бара: тёмные только на светлой теме
+            SideEffect {
+                WindowCompat.getInsetsController(window, view).apply {
+                    isAppearanceLightStatusBars = (themeMode == ThemeMode.LIGHT)
+                    isAppearanceLightNavigationBars = (themeMode == ThemeMode.LIGHT)
+                }
+            }
+
             TrainerAppTheme(themeMode = themeMode) {
                 MainScreen()
             }
@@ -133,7 +161,21 @@ fun MainScreen() {
         NavHost(
             navController = navController,
             startDestination = "dashboard",
-            modifier = Modifier.padding(paddingValues)
+            modifier = Modifier.padding(paddingValues),
+            // Плавные переходы: вперёд — появление снизу с фейдом,
+            // назад — лёгкий уход вниз с фейдом
+            enterTransition = {
+                fadeIn(tween(250)) + slideInVertically(tween(250)) { it / 12 }
+            },
+            exitTransition = {
+                fadeOut(tween(200))
+            },
+            popEnterTransition = {
+                fadeIn(tween(250)) + slideInVertically(tween(250)) { -it / 12 }
+            },
+            popExitTransition = {
+                fadeOut(tween(200)) + slideOutVertically(tween(250)) { it / 12 }
+            }
         ) {
             composable("dashboard") {
                 DashboardScreen(
