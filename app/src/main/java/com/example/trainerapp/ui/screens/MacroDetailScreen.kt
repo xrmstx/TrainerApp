@@ -38,6 +38,28 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import androidx.compose.material.icons.filled.FitnessCenter
+import com.example.trainerapp.ui.components.EmptyState
+
+// было:
+if (weekWorkouts.isEmpty()) {
+    Box(...) { Text("Неделя $currentWeek пуста....") }
+} else { LazyColumn { ... } }
+
+// стало:
+if (weekWorkouts.isEmpty()) {
+    EmptyState(
+        icon = Icons.Default.FitnessCenter,
+        title = "Неделя $currentWeek пуста",
+        subtitle = if (currentWeek > 1) "Скопируйте предыдущую неделю с прогрессией или добавьте дни вручную"
+                   else "Добавьте первый день через «+» внизу",
+        actionLabel = if (currentWeek > 1) null else "Добавить день",
+        onAction = if (currentWeek > 1) null else ({ viewModel.openDialog() })
+    )
+} else {
+    LazyColumn { /* как было */ }
+}
+
 
 class MacroDetailViewModel(application: Application, val macroId: Long) : AndroidViewModel(application) {
     private val dao = AppDatabase.getDatabase(application).appDao()
