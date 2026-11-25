@@ -35,6 +35,24 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import androidx.compose.material.icons.filled.EventNote
+import androidx.compose.material.icons.filled.HourglassEmpty
+import com.example.trainerapp.ui.components.EmptyState
+
+if (workouts.isEmpty()) {
+    EmptyState(
+        icon = Icons.Default.EventNote,
+        title = "Программа пуста",
+        subtitle = "Тренировки не назначены. Попросите тренера назначить программу заново."
+    )
+} else if (weekWorkouts.isEmpty()) {
+    EmptyState(
+        icon = Icons.Default.HourglassEmpty,
+        title = "Неделя $activeWeek пуста",
+        subtitle = "В шаблоне не заполнена эта неделя — проверьте шаблон программы."
+    )
+} else { LazyColumn { /* как было */ } }
+
 
 class ClientProgramDetailViewModel(application: Application, private val programId: Long) :
     AndroidViewModel(application) {
