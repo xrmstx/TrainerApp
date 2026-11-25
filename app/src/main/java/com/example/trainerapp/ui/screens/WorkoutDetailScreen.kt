@@ -46,6 +46,12 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
     val showBlockDialog: StateFlow<Boolean> = _showBlockDialog.asStateFlow()
     private val _newBlockTitle = MutableStateFlow("")
     val newBlockTitle: StateFlow<String> = _newBlockTitle.asStateFlow()
+    private val _blockType = MutableStateFlow("LINEAR")
+    val blockType: StateFlow<String> = _blockType.asStateFlow()
+    private val _protocol = MutableStateFlow("AMRAP")
+    val protocol: StateFlow<String> = _protocol.asStateFlow()
+    private val _protocolValue = MutableStateFlow("")
+    val protocolValue: StateFlow<String> = _protocolValue.asStateFlow()
 
     private val _blockError = MutableStateFlow<String?>(null)
     val blockError: StateFlow<String?> = _blockError.asStateFlow()
@@ -53,6 +59,8 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
     private val _showExerciseDialog = MutableStateFlow(false)
     val showExerciseDialog: StateFlow<Boolean> = _showExerciseDialog.asStateFlow()
     private val _currentBlockId = MutableStateFlow<Long?>(null)
+    private val _currentBlockIsCircuit = MutableStateFlow(false)
+    val currentBlockIsCircuit: StateFlow<Boolean> = _currentBlockIsCircuit.asStateFlow()
     private val _editExercise = MutableStateFlow<TemplateExercise?>(null)
     val editExercise: StateFlow<TemplateExercise?> = _editExercise.asStateFlow()
 
@@ -85,9 +93,14 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
         }
     }
 
-    fun openBlockDialog() { _showBlockDialog.value = true; _newBlockTitle.value = "" }
+    fun openBlockDialog() { _showBlockDialog.value = true; _newBlockTitle.value = ""; _blockType.value = "LINEAR"; _protocol.value = "AMRAP"; _protocolValue.value = "" }
     fun closeBlockDialog() { _showBlockDialog.value = false }
     fun onBlockTitleChange(title: String) { _newBlockTitle.value = title }
+    fun onBlockTypeChange(type: String) {
+        _blockType.value = type
+        if (type != "CIRCUIT") { _protocol.value = "AMRAP"; _protocolValue.value = "" }
+    }
+    fun onProtocolChange(protocol: String) { _protocol.value = protocol; _protocolValue.value = "" }
 
     fun clearBlockError() { _blockError.value = null }
 
@@ -97,7 +110,20 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
         viewModelScope.launch {
             try {
                 val order = (dao.getMaxBlockOrder(workoutId) ?: 0) + 1
-                dao.insertExerciseBlock(ExerciseBlock(workoutId = workoutId, blockTitle = title, order = order))
+                val type = _blockType.value
+                // Протокол имеет смысл только у Circuit-блока
+                val protocol = if (type == "CIRCUIT") _protocol.value else "NONE"
+                val protocolValue = if (type == "CIRCUIT") _protocolValue.value.trim() else ""
+                dao.insertExerciseBlock(
+                    ExerciseBlock(
+                        workoutId = workoutId,
+                        blockTitle = title,
+                        blockType = type,
+                        order = order,
+                        protocol = protocol,
+                        protocolValue = protocolValue
+                    )
+                )
                 loadBlocks()
                 closeBlockDialog()
             } catch (e: Exception) {
@@ -117,8 +143,9 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
         }
     }
 
-    fun openExerciseDialog(blockId: Long, ex: TemplateExercise? = null) {
-        _currentBlockId.value = blockId
+    fun openExerciseDialog(block: ExerciseBlock, ex: TemplateExercise? = null) {
+        _currentBlockId.value = block.id
+        _currentBlockIsCircuit.value = block.blockType == "CIRCUIT"
         _editExercise.value = ex
         _showExerciseDialog.value = true
         if (ex != null) {
@@ -129,8 +156,11 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
             _exMetric.value = ex.metricType
             _exType.value = if (ex.targetSets == 0) "CIRCUIT" else "LINEAR"
         } else {
+            // Тип упражнения наследуется от блока: в Circuit-блоке — Circuit, иначе Linear
+            val inheritedType = if (block.blockType == "CIRCUIT") "CIRCUIT" else "LINEAR"
             _exName.value = ""; _exSets.value = ""; _exReps.value = ""; _exNote.value = ""
-            _exMetric.value = "REPS"; _exType.value = "LINEAR"
+            _exMetric.value = if (inheritedType == "CIRCUIT") "REPS" else "REPS"
+            _exType.value = inheritedType
         }
     }
 
@@ -138,6 +168,7 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
         _showExerciseDialog.value = false
         _editExercise.value = null
         _currentBlockId.value = null
+        _currentBlockIsCircuit.value = false
     }
 
     fun onNameChange(name: String) { _exName.value = name }
@@ -166,8 +197,9 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
         val isCircuit = _exType.value == "CIRCUIT"
         val sets = if (isCircuit) 0 else (_exSets.value.trim().toIntOrNull() ?: 0)
 
-        if (name.isEmpty() || reps.isEmpty()) return
-        if (!isCircuit && sets <= 0) return
+        if (name.isEmpty()) return
+        // В Circuit у упражнения может не быть повторений — метрика (метры, ккал, время) важнее
+        if (!isCircuit && (reps.isEmpty() || sets <= 0)) return
 
         viewModelScope.launch {
             try {
@@ -228,6 +260,34 @@ class WorkoutDetailViewModelFactory(private val application: Application, privat
 private val metricLabels = listOf(
     "REPS" to "Повт.", "WEIGHT" to "Вес", "TIME" to "Время", "DISTANCE" to "Дист.", "CALORIES" to "Ккал"
 )
+
+private val protocolLabels = listOf(
+    "AMRAP" to "AMRAP", "EMOM" to "EMOM", "FOR_TIME" to "For Time",
+    "RFT" to "RFT", "TABATA" to "Tabata", "CUSTOM" to "Свой"
+)
+
+private val protocolHints = mapOf(
+    "AMRAP" to "Время, мин (например, 10)",
+    "EMOM" to "Длительность, мин (например, 12)",
+    "FOR_TIME" to "Схема (например, 21-15-9)",
+    "RFT" to "Раундов на время (например, 3)",
+    "TABATA" to "Схема (например, 20/10×8)",
+    "CUSTOM" to "Схема свободно"
+)
+
+private fun protocolBadge(block: ExerciseBlock): String? {
+    if (block.blockType != "CIRCUIT" || block.protocol == "NONE") return null
+    return when (block.protocol) {
+        "AMRAP" -> "AMRAP ${block.protocolValue} мин"
+        "EMOM" -> "EMOM ${block.protocolValue} мин"
+        "FOR_TIME" -> "For Time" + (if (block.protocolValue.isNotBlank()) " · ${block.protocolValue}" else "")
+        "RFT" -> "RFT ${block.protocolValue}"
+        "TABATA" -> "Tabata ${block.protocolValue}"
+        "CUSTOM" -> if (block.protocolValue.isNotBlank()) block.protocolValue else "Своя схема"
+        else -> null
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () -> Unit) {
@@ -239,8 +299,12 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
     val blockExercises by viewModel.blockExercises.collectAsState()
     val showBlockDialog by viewModel.showBlockDialog.collectAsState()
     val newBlockTitle by viewModel.newBlockTitle.collectAsState()
+    val blockType by viewModel.blockType.collectAsState()
+    val protocol by viewModel.protocol.collectAsState()
+    val protocolValue by viewModel.protocolValue.collectAsState()
     val showExerciseDialog by viewModel.showExerciseDialog.collectAsState()
     val isEditing by viewModel.editExercise.collectAsState()
+    val blockIsCircuit by viewModel.currentBlockIsCircuit.collectAsState()
     val exName by viewModel.exName.collectAsState()
     val exSets by viewModel.exSets.collectAsState()
     val exReps by viewModel.exReps.collectAsState()
@@ -282,13 +346,54 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
             onDismissRequest = { viewModel.closeBlockDialog() },
             title = { Text("Новый блок") },
             text = {
-                OutlinedTextField(
-                    value = newBlockTitle,
-                    onValueChange = { viewModel.onBlockTitleChange(it) },
-                    label = { Text("Название (Разминка, Силовая, Меткон)") },
-                    shape = RoundedCornerShape(12.dp),
-                    singleLine = true
-                )
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    OutlinedTextField(
+                        value = newBlockTitle,
+                        onValueChange = { viewModel.onBlockTitleChange(it) },
+                        label = { Text("Название (Разминка, Силовая, Меткон)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = blockType == "LINEAR",
+                            onClick = { viewModel.onBlockTypeChange("LINEAR") },
+                            label = { Text("Подходы") }
+                        )
+                        FilterChip(
+                            selected = blockType == "CIRCUIT",
+                            onClick = { viewModel.onBlockTypeChange("CIRCUIT") },
+                            label = { Text("Меткон") }
+                        )
+                    }
+                    if (blockType == "CIRCUIT") {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text("Протокол", style = MaterialTheme.typography.labelMedium)
+                        Row(
+                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            protocolLabels.forEach { (value, label) ->
+                                FilterChip(
+                                    selected = protocol == value,
+                                    onClick = { viewModel.onProtocolChange(value) },
+                                    label = { Text(label) }
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = protocolValue,
+                            onValueChange = { viewModel.onProtocolValueChange(it) },
+                            label = { Text(protocolHints[protocol] ?: "Значение") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            singleLine = true
+                        )
+                    }
+                }
             },
             confirmButton = { TextButton(onClick = { viewModel.addBlock() }) { Text("Добавить") } },
             dismissButton = { TextButton(onClick = { viewModel.closeBlockDialog() }) { Text("Отмена") } }
@@ -309,20 +414,7 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
                         shape = RoundedCornerShape(12.dp),
                         singleLine = true
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
-                            selected = exType == "LINEAR",
-                            onClick = { viewModel.onTypeChange("LINEAR") },
-                            label = { Text("Подходы") }
-                        )
-                        FilterChip(
-                            selected = exType == "CIRCUIT",
-                            onClick = { viewModel.onTypeChange("CIRCUIT") },
-                            label = { Text("Circuit") }
-                        )
-                    }
-                    if (exType == "LINEAR") {
+                    if (!blockIsCircuit) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedTextField(
@@ -344,10 +436,11 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
                         }
                     } else {
                         Spacer(modifier = Modifier.height(8.dp))
+                        // В Circuit-блоке схема уже задана протоколом блока — тут только количество на раунд
                         OutlinedTextField(
                             value = exReps,
                             onValueChange = { viewModel.onRepsChange(it) },
-                            label = { Text("Формат (например, AMRAP 10 мин)") },
+                            label = { Text(if (exMetric == "TIME") "Время" else if (exMetric == "DISTANCE") "Метры" else if (exMetric == "CALORIES") "Ккал" else "Повторов на раунд") },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp),
                             singleLine = true
@@ -456,7 +549,12 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
                         ) {
                             Column(modifier = Modifier.padding(12.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(block.blockTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(block.blockTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                        protocolBadge(block)?.let { badge ->
+                                            Text(badge, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                                        }
+                                    }
                                     IconButton(onClick = { blockToDelete = block }) {
                                         Icon(Icons.Default.Delete, contentDescription = "Удалить блок", tint = MaterialTheme.colorScheme.error)
                                     }
@@ -468,7 +566,7 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
                                     exercises.forEach { ex ->
                                         Card(
                                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).combinedClickable(
-                                                onClick = { viewModel.openExerciseDialog(block.id, ex) },
+                                                onClick = { viewModel.openExerciseDialog(block, ex) },
                                                 onLongClick = { viewModel.deleteExercise(ex) }
                                             ),
                                             shape = RoundedCornerShape(10.dp),
@@ -481,15 +579,21 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
                                                         Text(ex.note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                                                     }
                                                 }
-                                                val plan = if (ex.targetSets == 0) ex.targetReps else "${ex.targetSets}×${ex.targetReps}"
-                                                Text(plan, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                                val plan = if (ex.targetSets == 0) {
+                                                    // Circuit: показываем метрику, если повторения не заданы (метры, ккал, время)
+                                                    if (ex.targetReps.isBlank()) metricLabels.firstOrNull { it.first == ex.metricType }?.second ?: ""
+                                                    else ex.targetReps
+                                                } else "${ex.targetSets}×${ex.targetReps}"
+                                                if (plan.isNotBlank()) {
+                                                    Text(plan, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                                }
                                             }
                                         }
                                     }
                                 }
                                 Spacer(modifier = Modifier.height(4.dp))
                                 OutlinedButton(
-                                    onClick = { viewModel.openExerciseDialog(block.id) },
+                                    onClick = { viewModel.openExerciseDialog(block) },
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(10.dp)
                                 ) {
