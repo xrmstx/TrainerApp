@@ -334,21 +334,49 @@ fun ClientDetailScreen(
                 shape = RoundedCornerShape(18.dp),
                 elevation = CardDefaults.cardElevation(3.dp)
             ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "Цель: ${client?.goal ?: "Не задана"}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Заметки: ${client?.notes ?: "Нет заметок"}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                    )
+                val currentClient = client
+                if (currentClient != null) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        currentClient.goal?.let { goal ->
+                            Text(
+                                text = "Цель",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = goal,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                        }
+                        currentClient.notes?.let { notes ->
+                            Text(
+                                text = "Заметки",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = notes,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                        if (currentClient.goal == null && currentClient.notes == null) {
+                            Text(
+                                text = "Цель и заметки пока не заполнены",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                            )
+                        }
+                    }
+                } else {
+                    // Скелетон, пока клиент грузится — без фальшивого «Не задана»
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "…",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                        )
+                    }
                 }
             }
 

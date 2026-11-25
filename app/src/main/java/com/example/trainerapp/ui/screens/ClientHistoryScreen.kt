@@ -44,7 +44,8 @@ data class HistoryExerciseGroup(
 )
 
 data class HistorySession(
-    val programId: Long, // нужен для стабильного key в LazyColumn
+    val workoutId: Long, // уникальный ключ записи в LazyColumn (первичный ключ БД)
+    val programId: Long,
     val programName: String,
     val dayNumber: Int,
     val workoutName: String,
@@ -99,6 +100,7 @@ class ClientHistoryViewModel(application: Application, val clientId: Long) : And
                         val sessionDate = groups.maxOf { g -> g.logs.maxOf { it.date } }
                         sessions.add(
                             HistorySession(
+                                workoutId = workout.id,
                                 programId = program.id,
                                 programName = program.name.ifEmpty { "Программа" },
                                 dayNumber = workout.dayNumber,
@@ -206,9 +208,8 @@ fun ClientHistoryScreen(clientId: Long, onBackClick: () -> Unit) {
                         }
                     }
 
-                    // Стабильный key: programId + день + дата; дата даёт уникальность,
-                    // если клиент проходит одну и ту же программу повторно
-                    items(sessions, key = { "${it.programId}-${it.dayNumber}-${it.date}" }) { session ->
+                    // Ключ — первичный ключ БД: дубликаты невозможны в принципе
+                    items(sessions, key = { it.workoutId }) { session ->
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
                             shape = RoundedCornerShape(18.dp),

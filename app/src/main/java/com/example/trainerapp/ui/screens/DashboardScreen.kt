@@ -123,11 +123,13 @@ fun DashboardScreen(onWorkoutClick: (Long, String) -> Unit, onSettingsClick: () 
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Card(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(vertical = 8.dp),
                     shape = RoundedCornerShape(16.dp),
                     elevation = CardDefaults.cardElevation(2.dp)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(modifier = Modifier.padding(12.dp)) {
                         Text(
                             "${workouts.size}",
                             style = MaterialTheme.typography.headlineMedium,
@@ -142,11 +144,13 @@ fun DashboardScreen(onWorkoutClick: (Long, String) -> Unit, onSettingsClick: () 
                     }
                 }
                 Card(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(vertical = 8.dp),
                     shape = RoundedCornerShape(16.dp),
                     elevation = CardDefaults.cardElevation(2.dp)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(modifier = Modifier.padding(12.dp)) {
                         Text(
                             "$clientsCount",
                             style = MaterialTheme.typography.headlineMedium,
@@ -181,9 +185,7 @@ fun DashboardScreen(onWorkoutClick: (Long, String) -> Unit, onSettingsClick: () 
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         items(workouts, key = { it.workoutId }) { item ->
                             Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
+                                modifier = Modifier.fillMaxWidth(),
                                 onClick = { onWorkoutClick(item.workoutId, item.workoutName) },
                                 shape = RoundedCornerShape(16.dp),
                                 elevation = CardDefaults.cardElevation(2.dp)

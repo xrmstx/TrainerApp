@@ -1,5 +1,6 @@
 package com.example.trainerapp.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
@@ -50,12 +51,17 @@ fun TemplateScreen(onMacroClick: (Long, String) -> Unit, viewModel: TemplateView
 
     Scaffold(topBar = { TopAppBar(title = { Text("Шаблоны программ", fontWeight = FontWeight.Bold) }) }) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { viewModel.onNameChange(it) },
                     label = { Text("Название") },
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp),
                     shape = RoundedCornerShape(12.dp),
                     singleLine = true
                 )
@@ -64,12 +70,22 @@ fun TemplateScreen(onMacroClick: (Long, String) -> Unit, viewModel: TemplateView
                     value = weeks,
                     onValueChange = { viewModel.onWeeksChange(it) },
                     label = { Text("Недель") },
-                    modifier = Modifier.width(90.dp),
+                    modifier = Modifier
+                        .width(110.dp)
+                        .height(56.dp),
                     shape = RoundedCornerShape(12.dp),
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    isError = weeksError,
-                    supportingText = { if (weeksError) Text("1–52") }
+                    isError = weeksError
+                )
+            }
+            // Ошибка вынесена из слота supportingText — она не раздувает высоту поля
+            AnimatedVisibility(visible = weeksError) {
+                Text(
+                    "Укажите длительность от 1 до 52 недель",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 4.dp)
                 )
             }
             Spacer(modifier = Modifier.height(12.dp))

@@ -149,6 +149,18 @@ interface AppDao {
     @Query("UPDATE client_workouts SET status = :status WHERE id = :workoutId")
     suspend fun setClientWorkoutStatus(workoutId: Long, status: String)
 
+    // Первая незакрытая тренировка клиента по всем его активным программам
+    @Query("""
+        SELECT cw.* FROM client_workouts cw
+        JOIN client_programs cp ON cw.clientProgramId = cp.id
+        WHERE cp.clientId = :clientId
+          AND cp.status != 'DONE'
+          AND cw.status = 'PLANNED'
+        ORDER BY cw.weekNumber ASC, cw.dayNumber ASC, cw.id ASC
+        LIMIT 1
+    """)
+    suspend fun getNextClientWorkoutSync(clientId: Long): ClientWorkout?
+
     // --- Упражнения клиента ---
     @Query("SELECT * FROM client_exercises WHERE clientWorkoutId = :workoutId ORDER BY blockOrder ASC, `order` ASC, id ASC")
     fun getClientExercises(workoutId: Long): Flow<List<ClientExercise>>
@@ -193,15 +205,23 @@ interface AppDao {
     suspend fun getClientIdForWorkoutSync(workoutId: Long): Long?
 
     // --- Сводка на сегодня ---
+    // Ровно одна незакрытая тренировка на клиента: самая ранняя PLANNED
+    // по его активным программам. Следующая появится после закрытия текущей.
     @Query("""
     SELECT cw.id AS workoutId, cw.name AS workoutName,
-           cp.weekNumber AS weekNumber, cw.dayNumber AS dayNumber, cw.status AS status,
+           cw.weekNumber AS weekNumber, cw.dayNumber AS dayNumber, cw.status AS status,
            c.name AS clientName, cp.id AS programId
     FROM client_workouts cw
-    INNER JOIN client_programs cp ON cw.clientProgramId = cp.id
-    INNER JOIN clients c ON cp.clientId = c.id
+    JOIN client_programs cp ON cw.clientProgramId = cp.id
+    JOIN clients c ON cp.clientId = c.id
     WHERE cw.status = 'PLANNED' AND cp.status != 'DONE'
-    ORDER BY c.name, cw.dayNumber
+      AND cw.id = (
+          SELECT cw2.id FROM client_workouts cw2
+          WHERE cw2.clientProgramId = cp.id AND cw2.status = 'PLANNED'
+          ORDER BY cw2.weekNumber ASC, cw2.dayNumber ASC, cw2.id ASC
+          LIMIT 1
+      )
+    ORDER BY c.name, cw.weekNumber, cw.dayNumber
 """)
     suspend fun getTodayWorkoutsSync(): List<TodayWorkout>
 
