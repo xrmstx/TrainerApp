@@ -1,14 +1,17 @@
 package com.example.trainerapp.ui.screens
 
 import android.app.Application
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -40,9 +43,17 @@ class ClientProgramDetailViewModel(application: Application, private val program
     private val _program = MutableStateFlow<ClientProgram?>(null)
     val program: StateFlow<ClientProgram?> = _program.asStateFlow()
 
+    // Выбранная неделя: по умолчанию — текущая неделя программы
+    private val _currentWeek = MutableStateFlow<Int?>(null)
+    val currentWeek: StateFlow<Int?> = _currentWeek.asStateFlow()
+
     init {
-        viewModelScope.launch { _program.value = dao.getClientProgramSync(programId) }
+        viewModelScope.launch {
+            _program.value = dao.getClientProgramSync(programId)
+        }
     }
+
+    fun onWeekChange(week: Int) { _currentWeek.value = week }
 
     fun toggleStatus(workoutId: Long, currentStatus: String) {
         viewModelScope.launch {
@@ -80,9 +91,21 @@ fun ClientProgramDetailScreen(
 
     val program by viewModel.program.collectAsState()
     val workouts by viewModel.workouts.collectAsState(initial = emptyList())
+    val selectedWeek by viewModel.currentWeek.collectAsState()
 
-    val doneCount = workouts.count { it.status == "DONE" }
-    val progress = if (workouts.isNotEmpty()) doneCount.toFloat() / workouts.size else 0f
+    val totalWeeks = program?.totalWeeks ?: 0
+    // Пока программа не загрузилась, неделя не выбрана; после загрузки — текущая неделя программы
+    val activeWeek = selectedWeek
+        ?: program?.weekNumber
+        ?: workouts.minOfOrNull { it.weekNumber }
+        ?: 1
+
+    val weekWorkouts = workouts.filter { it.weekNumber == activeWeek }.sortedBy { it.dayNumber }
+    val weekDone = weekWorkouts.count { it.status == "DONE" }
+    val weekProgress = if (weekWorkouts.isNotEmpty()) weekDone.toFloat() / weekWorkouts.size else 0f
+
+    val allDone = workouts.count { it.status == "DONE" }
+    val allProgress = if (workouts.isNotEmpty()) allDone.toFloat() / workouts.size else 0f
 
     Scaffold(
         topBar = {
@@ -102,23 +125,59 @@ fun ClientProgramDetailScreen(
                 .padding(paddingValues)
                 .padding(16.dp)
         ) {
-            program?.let { p ->
-                Text(
-                    "Неделя ${p.weekNumber} из ${p.totalWeeks}",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
+            // Переключатель недель программы
+            if (totalWeeks > 0) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    (1..totalWeeks).forEach { week ->
+                        val weekDoneCount = workouts.count { it.weekNumber == week && it.status == "DONE" }
+                        val weekTotal = workouts.count { it.weekNumber == week }
+                        val isPast = program?.let { week < it.weekNumber } ?: false
+                        FilterChip(
+                            selected = week == activeWeek,
+                            onClick = { viewModel.onWeekChange(week) },
+                            label = {
+                                Text(
+                                    when {
+                                        weekTotal > 0 && weekDoneCount == weekTotal -> "Нед. $week ✓"
+                                        else -> "Нед. $week"
+                                    }
+                                )
+                            }
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.height(8.dp))
             }
+
+            // Прогресс недели
             Row(verticalAlignment = Alignment.CenterVertically) {
                 LinearProgressIndicator(
-                    progress = progress,
+                    progress = weekProgress,
                     modifier = Modifier.weight(1f),
                     color = MaterialTheme.colorScheme.primary
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    "Выполнено: $doneCount из ${workouts.size}",
+                    if (weekWorkouts.isEmpty()) "Неделя пуста"
+                    else "Неделя: $weekDone из ${weekWorkouts.size}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            // Общий прогресс программы
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                LinearProgressIndicator(
+                    progress = allProgress,
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.tertiary
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    "Всего: $allDone из ${workouts.size}",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                 )
@@ -132,17 +191,28 @@ fun ClientProgramDetailScreen(
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
                     )
                 }
+            } else if (weekWorkouts.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        "Неделя $activeWeek пуста.\nПроверьте шаблон: в нём не заполнена эта неделя.",
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                    )
+                }
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(workouts, key = { it.id }) { w ->
+                    items(weekWorkouts, key = { it.id }) { w ->
                         val isDone = w.status == "DONE"
+                        val isRecovery = w.dayType == "RECOVERY"
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(14.dp),
                             elevation = CardDefaults.cardElevation(2.dp),
                             colors = CardDefaults.cardColors(
-                                containerColor = if (isDone) StatusDone.copy(alpha = 0.12f)
-                                else MaterialTheme.colorScheme.surface
+                                containerColor = when {
+                                    isDone -> StatusDone.copy(alpha = 0.12f)
+                                    isRecovery -> MaterialTheme.colorScheme.tertiary.copy(alpha = 0.08f)
+                                    else -> MaterialTheme.colorScheme.surface
+                                }
                             ),
                             onClick = { onWorkoutClick(w.id, w.name) }
                         ) {
@@ -156,11 +226,23 @@ fun ClientProgramDetailScreen(
                                         style = MaterialTheme.typography.titleSmall,
                                         fontWeight = FontWeight.SemiBold
                                     )
-                                    Text(
-                                        "День ${w.dayNumber}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        if (isRecovery) {
+                                            Icon(
+                                                Icons.Default.SelfImprovement,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.tertiary,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                        }
+                                        Text(
+                                            if (isRecovery) "Восстановительный день" else "День ${w.dayNumber}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (isRecovery) MaterialTheme.colorScheme.tertiary
+                                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                        )
+                                    }
                                 }
                                 IconButton(onClick = { viewModel.toggleStatus(w.id, w.status) }) {
                                     Icon(
