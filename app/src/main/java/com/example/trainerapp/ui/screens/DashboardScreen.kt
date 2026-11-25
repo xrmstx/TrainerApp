@@ -8,8 +8,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.EventNote
-import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -85,7 +85,7 @@ private fun statusColor(status: String) = when (status) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DashboardScreen(onWorkoutClick: (Long, String) -> Unit) {
+fun DashboardScreen(onWorkoutClick: (Long, String) -> Unit, onSettingsClick: () -> Unit = {}) {
     val application = LocalContext.current.applicationContext as Application
     val viewModel: DashboardViewModel = viewModel(factory = DashboardViewModelFactory(application))
 
@@ -98,6 +98,9 @@ fun DashboardScreen(onWorkoutClick: (Long, String) -> Unit) {
             TopAppBar(
                 title = { Text("Сегодня", fontWeight = FontWeight.Bold) },
                 actions = {
+                    IconButton(onClick = onSettingsClick) {
+                        Icon(Icons.Default.Settings, contentDescription = "Настройки")
+                    }
                     IconButton(onClick = { viewModel.refresh() }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Обновить")
                     }
