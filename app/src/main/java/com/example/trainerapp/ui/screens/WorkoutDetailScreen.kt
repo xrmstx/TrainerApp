@@ -93,13 +93,7 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
         }
     }
 
-    fun openBlockDialog() {
-        _showBlockDialog.value = true
-        _newBlockTitle.value = ""
-        _blockType.value = "LINEAR"
-        _protocol.value = "AMRAP"
-        _protocolValue.value = ""
-    }
+    fun openBlockDialog() { _showBlockDialog.value = true; _newBlockTitle.value = ""; _blockType.value = "LINEAR"; _protocol.value = "AMRAP"; _protocolValue.value = "" }
     fun closeBlockDialog() { _showBlockDialog.value = false }
     fun onBlockTitleChange(title: String) { _newBlockTitle.value = title }
     fun onBlockTypeChange(type: String) {
@@ -163,11 +157,10 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
             _exMetric.value = ex.metricType
             _exType.value = if (ex.targetSets == 0) "CIRCUIT" else "LINEAR"
         } else {
-            // Тип упражнения наследуется от блока: в Circuit-блоке все упражнения Circuit
-            val inheritedType = if (block.blockType == "CIRCUIT") "CIRCUIT" else "LINEAR"
+            // Тип упражнения наследуется от блока: в Circuit-блоке — Circuit, иначе Linear
             _exName.value = ""; _exSets.value = ""; _exReps.value = ""; _exNote.value = ""
             _exMetric.value = "REPS"
-            _exType.value = inheritedType
+            _exType.value = if (block.blockType == "CIRCUIT") "CIRCUIT" else "LINEAR"
         }
     }
 
@@ -205,7 +198,7 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
         val sets = if (isCircuit) 0 else (_exSets.value.trim().toIntOrNull() ?: 0)
 
         if (name.isEmpty()) return
-        // В Circuit у упражнения могут отсутствовать повторения — метрика (метры, ккал, время) важнее
+        // В Circuit у упражнения может не быть повторений — метрика (метры, ккал, время) важнее
         if (!isCircuit && (reps.isEmpty() || sets <= 0)) return
 
         viewModelScope.launch {
@@ -408,6 +401,15 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
     }
 
     if (showExerciseDialog) {
+        // Подсказки из библиотеки: пока имя не совпало с найденным целиком
+        val suggestions = remember(exName) {
+            val query = exName.trim()
+            if (query.isEmpty()) emptyList()
+            else ExerciseLibraryRegistry.search(query)
+                .filter { !it.exerciseName.equals(query, ignoreCase = true) }
+                .take(5)
+        }
+
         AlertDialog(
             onDismissRequest = { viewModel.closeExerciseDialog() },
             title = { Text(if (isEditing != null) "Редактировать упражнение" else "Новое упражнение") },
@@ -421,6 +423,27 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
                         shape = RoundedCornerShape(12.dp),
                         singleLine = true
                     )
+                    if (suggestions.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        suggestions.forEach { entry ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp).combinedClickable(
+                                    onClick = { viewModel.applyFromLibrary(entry) }
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                            ) {
+                                Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+                                    Text(entry.exerciseName, style = MaterialTheme.typography.bodyMedium)
+                                    Text(
+                                        "${entry.libraryTitle} · ${entry.categoryTitle}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                    )
+                                }
+                            }
+                        }
+                    }
                     if (!blockIsCircuit) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -587,7 +610,7 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
                                                     }
                                                 }
                                                 val plan = if (ex.targetSets == 0) {
-                                                    // Circuit: если повторения не заданы, показываем метку метрики (метры, ккал, время)
+                                                    // Circuit: показываем метрику, если повторения не заданы (метры, ккал, время)
                                                     if (ex.targetReps.isBlank()) metricLabels.firstOrNull { it.first == ex.metricType }?.second ?: ""
                                                     else ex.targetReps
                                                 } else "${ex.targetSets}×${ex.targetReps}"
