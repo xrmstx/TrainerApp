@@ -53,7 +53,9 @@ data class ExerciseBlock(
     val workoutId: Long,
     val blockTitle: String, // "Разминка", "Скилл", "Силовая", "Меткон"
     val blockType: String = "LINEAR", // LINEAR, CIRCUIT, TEXT
-    val order: Int = 0
+    val order: Int = 0,
+    val protocol: String = "NONE",   // NONE, AMRAP, EMOM, FOR_TIME, RFT, TABATA, CUSTOM
+    val protocolValue: String = ""   // "10" (минут) для AMRAP, "20/10×8" для TABATA, "21-15-9" для CUSTOM
 )
 
 @Entity(
@@ -140,7 +142,9 @@ data class ClientExercise(
     val targetReps: String,
     val targetWeight: Double? = null,
     val note: String? = null,
-    val metricType: String = "REPS"
+    val metricType: String = "REPS",
+    val protocol: String = "NONE",   // копируется из блока шаблона при назначении программы
+    val protocolValue: String = ""
 )
 
 @Entity(
