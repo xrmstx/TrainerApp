@@ -101,12 +101,15 @@ class ClientDetailViewModel(
                     )
                 )
 
+                // Копируем все недели шаблона: каждая тренировка получает свой weekNumber и dayType
                 dao.getWorkoutsForMacroSync(macrocycle.id).forEach { originalWorkout ->
                     val newWorkoutId = dao.insertClientWorkout(
                         ClientWorkout(
                             clientProgramId = programId,
                             originalWorkoutId = originalWorkout.id,
+                            weekNumber = originalWorkout.weekNumber,
                             dayNumber = originalWorkout.dayNumber,
+                            dayType = originalWorkout.dayType,
                             name = originalWorkout.name
                         )
                     )
@@ -126,7 +129,7 @@ class ClientDetailViewModel(
                                     targetWeight = exercise.targetWeight,
                                     note = exercise.note,
                                     metricType = exercise.metricType,
-                                    protocol = block.protocol,          // протокол блока доехал до клиента
+                                    protocol = block.protocol,
                                     protocolValue = block.protocolValue
                                 )
                             )
