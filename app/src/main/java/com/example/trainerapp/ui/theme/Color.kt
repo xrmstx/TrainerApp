@@ -2,7 +2,7 @@ package com.example.trainerapp.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Основной акцент — энергичный оранжевый (значения можно заменить на ваши прежние)
+// Основной акцент — энергичный оранжевый (замените на ваши прежние hex, если были)
 val AccentOrange = Color(0xFFFF7043)
 val OrangeDark = Color(0xFF7A2E0F)
 val OrangeContainerLight = Color(0xFFFFDBCE)
