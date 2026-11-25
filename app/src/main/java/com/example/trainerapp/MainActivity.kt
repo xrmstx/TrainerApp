@@ -28,6 +28,7 @@ import com.example.trainerapp.ui.screens.ClientProgramDetailScreen
 import com.example.trainerapp.ui.screens.ClientScreen
 import com.example.trainerapp.ui.screens.ClientWorkoutLogScreen
 import com.example.trainerapp.ui.screens.DashboardScreen
+import com.example.trainerapp.ui.screens.MacroDetailScreen
 import com.example.trainerapp.ui.screens.TemplateScreen
 import com.example.trainerapp.ui.screens.WorkoutDetailScreen
 import com.example.trainerapp.ui.theme.TrainerAppTheme
@@ -102,15 +103,25 @@ fun MainScreen() {
                 )
             }
             composable("templates") {
-    TemplateScreen(
-        onMacroClick = { templateId, templateName ->
-            navController.navigate("workout_detail/$templateId/${URLEncoder.encode(templateName, "UTF-8")}")
-        }
-    )
-}
-
-
-
+                TemplateScreen(
+                    onMacroClick = { macroId, macroName ->
+                        navController.navigate("macro_detail/$macroId/${URLEncoder.encode(macroName, "UTF-8")}")
+                    }
+                )
+            }
+            composable("macro_detail/{macroId}/{macroName}") { entry ->
+                val macroId = entry.arguments?.getString("macroId")?.toLongOrNull()
+                    ?: return@composable
+                val macroName = entry.arguments?.getString("macroName") ?: ""
+                MacroDetailScreen(
+                    macroId = macroId,
+                    macroName = macroName,
+                    onBackClick = { navController.popBackStack() },
+                    onWorkoutClick = { workoutId, workoutName ->
+                        navController.navigate("workout_detail/$workoutId/${URLEncoder.encode(workoutName, "UTF-8")}")
+                    }
+                )
+            }
             composable("client/{clientId}") { entry ->
                 val clientId = entry.arguments?.getString("clientId")?.toLongOrNull()
                     ?: return@composable
