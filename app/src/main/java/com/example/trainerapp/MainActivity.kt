@@ -3,6 +3,7 @@ package com.example.trainerapp
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -138,7 +139,13 @@ fun MainScreen() {
 
     Scaffold(
         bottomBar = {
-            if (showBottomBar) {
+            // Панель не убираем из дерева условием, а прячем анимацией —
+            // обход бага slot table при пересборке подвкладки Scaffold
+            AnimatedVisibility(
+                visible = showBottomBar,
+                enter = slideInVertically(tween(200)) { it } + fadeIn(tween(200)),
+                exit = slideOutVertically(tween(200)) { it } + fadeOut(tween(200))
+            ) {
                 NavigationBar {
                     bottomItems.forEach { item ->
                         NavigationBarItem(
