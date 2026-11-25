@@ -125,7 +125,9 @@ class ClientDetailViewModel(
                                     targetReps = exercise.targetReps,
                                     targetWeight = exercise.targetWeight,
                                     note = exercise.note,
-                                    metricType = exercise.metricType
+                                    metricType = exercise.metricType,
+                                    protocol = block.protocol,          // протокол блока доехал до клиента
+                                    protocolValue = block.protocolValue
                                 )
                             )
                         }
