@@ -93,7 +93,13 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
         }
     }
 
-    fun openBlockDialog() { _showBlockDialog.value = true; _newBlockTitle.value = ""; _blockType.value = "LINEAR"; _protocol.value = "AMRAP"; _protocolValue.value = "" }
+    fun openBlockDialog() {
+        _showBlockDialog.value = true
+        _newBlockTitle.value = ""
+        _blockType.value = "LINEAR"
+        _protocol.value = "AMRAP"
+        _protocolValue.value = ""
+    }
     fun closeBlockDialog() { _showBlockDialog.value = false }
     fun onBlockTitleChange(title: String) { _newBlockTitle.value = title }
     fun onBlockTypeChange(type: String) {
@@ -101,6 +107,7 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
         if (type != "CIRCUIT") { _protocol.value = "AMRAP"; _protocolValue.value = "" }
     }
     fun onProtocolChange(protocol: String) { _protocol.value = protocol; _protocolValue.value = "" }
+    fun onProtocolValueChange(value: String) { _protocolValue.value = value }
 
     fun clearBlockError() { _blockError.value = null }
 
@@ -156,10 +163,10 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
             _exMetric.value = ex.metricType
             _exType.value = if (ex.targetSets == 0) "CIRCUIT" else "LINEAR"
         } else {
-            // Тип упражнения наследуется от блока: в Circuit-блоке — Circuit, иначе Linear
+            // Тип упражнения наследуется от блока: в Circuit-блоке все упражнения Circuit
             val inheritedType = if (block.blockType == "CIRCUIT") "CIRCUIT" else "LINEAR"
             _exName.value = ""; _exSets.value = ""; _exReps.value = ""; _exNote.value = ""
-            _exMetric.value = if (inheritedType == "CIRCUIT") "REPS" else "REPS"
+            _exMetric.value = "REPS"
             _exType.value = inheritedType
         }
     }
@@ -198,7 +205,7 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
         val sets = if (isCircuit) 0 else (_exSets.value.trim().toIntOrNull() ?: 0)
 
         if (name.isEmpty()) return
-        // В Circuit у упражнения может не быть повторений — метрика (метры, ккал, время) важнее
+        // В Circuit у упражнения могут отсутствовать повторения — метрика (метры, ккал, время) важнее
         if (!isCircuit && (reps.isEmpty() || sets <= 0)) return
 
         viewModelScope.launch {
@@ -580,7 +587,7 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
                                                     }
                                                 }
                                                 val plan = if (ex.targetSets == 0) {
-                                                    // Circuit: показываем метрику, если повторения не заданы (метры, ккал, время)
+                                                    // Circuit: если повторения не заданы, показываем метку метрики (метры, ккал, время)
                                                     if (ex.targetReps.isBlank()) metricLabels.firstOrNull { it.first == ex.metricType }?.second ?: ""
                                                     else ex.targetReps
                                                 } else "${ex.targetSets}×${ex.targetReps}"
