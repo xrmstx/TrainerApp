@@ -40,6 +40,43 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.filled.FitnessCenter
 import com.example.trainerapp.ui.components.EmptyState
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
+
+// внутри Column, где раньше был if/else с LazyColumn:
+AnimatedContent(
+    targetState = currentWeek,
+    transitionSpec = {
+        // Перелистывание: неделя вправо — содержимое уезжает вправо, приходит слева, и наоборот
+        if (targetState > initialState) {
+            (slideInHorizontally(tween(300)) { it / 4 } + fadeIn(tween(300))) togetherWith
+                (slideOutHorizontally(tween(300)) { -it / 4 } + fadeOut(tween(300)))
+        } else {
+            (slideInHorizontally(tween(300)) { -it / 4 } + fadeIn(tween(300))) togetherWith
+                (slideOutHorizontally(tween(300)) { it / 4 } + fadeOut(tween(300)))
+        }
+    },
+    label = "weekContent"
+) { week ->
+    val weekWorkouts = allWorkouts.filter { it.weekNumber == week }.sortedBy { it.dayNumber }
+    if (weekWorkouts.isEmpty()) {
+        EmptyState(
+            icon = Icons.Default.FitnessCenter,
+            title = "Неделя $week пуста",
+            subtitle = if (week > 1) "Скопируйте предыдущую неделю с прогрессией или добавьте дни вручную"
+                       else "Добавьте первый день через «+» внизу",
+            actionLabel = if (week > 1) null else "Добавить день",
+            onAction = if (week > 1) null else ({ viewModel.openDialog() })
+        )
+    } else {
+        LazyColumn {
+            items(weekWorkouts, key = { it.id }) { workout ->
+                // карточка тренировки — как было
+            }
+        }
+    }
+}
+
 
 // было:
 if (weekWorkouts.isEmpty()) {
