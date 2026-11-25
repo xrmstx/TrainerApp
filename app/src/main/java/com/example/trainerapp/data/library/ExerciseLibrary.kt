@@ -280,11 +280,66 @@ object BodybuildingLibrary : ExerciseLibrary {
     )
 }
 
+object PrehabLibrary : ExerciseLibrary {
+    override val id = "prehab"
+    override val title = "Подготовка и мобильность"
+    override val categories = listOf(
+        cat(
+            "Разминка · Плечи, лопатки и грудной отдел",
+            "Провороты рук с палкой или резиной (Shoulder Pass-Through)",
+            "Разведения резины перед собой (Band Pull-Apart)",
+            "Внешняя ротация плеча с резиной (Band External Rotation)",
+            "Круги руками (Arm Circles)",
+            "Вращения плечами (Shoulder Rolls)",
+            "Повороты грудного отдела на четвереньках (Thoracic Rotation)",
+            "Кошка-корова (Cat-Cow)"
+        ),
+        cat(
+            "Разминка · Общая динамическая",
+            "«Червячок» (Inchworm Walk)",
+            "Выпад с поворотом корпуса (Lunge with Rotation)",
+            "Скорпион лёжа (Scorpion)",
+            "Присед с паузой и раскрытием таза (Deep Squat Hold with Rocking)",
+            "Махи ногой вперёд-назад (Leg Swings Forward-Back)",
+            "Махи ногой в сторону (Leg Swings Side-to-Side)",
+            "Ягодичный мост без веса (Glute Bridge)"
+        ),
+        cat(
+            "Разминка · Кор и «холлоу»",
+            "Hollow hold (Удержание холлоу)",
+            "Hollow rocks (Покачивания в холлоу)",
+            "Tuck hollow hold (Холлоу с согнутыми коленями)",
+            "Dead bug (Мёртвый жук)",
+            "Планка на предплечьях (Forearm Plank)"
+        ),
+        cat(
+            "Силовые · Плечи и верх спины",
+            "L-raise (Подъём рук буквой L)",
+            "U-raise (Подъём предплечий из позиции L)",
+            "Y-raise (Подъём рук по диагонали буквой Y)",
+            "Face pull с резиной (Band Face Pull)",
+            "Scapular push-up (Отжимание лопатками)",
+            "Подъём рук Y лёжа на животе (Prone Y-Raise)",
+            "Подъём рук T лёжа на животе (Prone T-Raise)",
+            "Подъём рук W лёжа на животе (Prone W-Raise)"
+        ),
+        cat(
+            "Силовые · Задняя поверхность бедра и ягодицы",
+            "Nordic hamstring (Нордик)",
+            "Сгибание ног с полотенцами или слайдерами (Slider Hamstring Curl)",
+            "Румынская тяга без веса (Bodyweight Romanian Deadlift)",
+            "Ягодичный мост на одной ноге (Single-Leg Glute Bridge)",
+            "Hip thrust без веса (Bodyweight Hip Thrust)",
+            "Одноногая румынская тяга без веса (Bodyweight Single-Leg RDL)"
+        )
+    )
+}
+
 data class LibraryEntry(val libraryTitle: String, val categoryTitle: String, val exerciseName: String)
 
 object ExerciseLibraryRegistry {
     // Новые библиотеки добавляются одной строкой сюда — весь остальной код уже готов к ним
-    val libraries: List<ExerciseLibrary> = listOf(CrossfitLibrary, BodybuildingLibrary)
+    val libraries: List<ExerciseLibrary> = listOf(CrossfitLibrary, BodybuildingLibrary, PrehabLibrary)
 
     fun allEntries(): List<LibraryEntry> = libraries.flatMap { lib ->
         lib.categories.flatMap { category ->
