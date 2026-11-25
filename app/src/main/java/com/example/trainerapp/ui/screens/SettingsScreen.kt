@@ -1,5 +1,6 @@
 package com.example.trainerapp.ui.screens
 
+import android.content.pm.PackageManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -16,7 +17,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.trainerapp.data.local.AppSettings
 import com.example.trainerapp.ui.theme.ThemeMode
 import com.example.trainerapp.ui.theme.colorSchemeFor
 
@@ -26,12 +26,25 @@ fun SettingsScreen(onBackClick: () -> Unit) {
     val context = LocalContext.current
     val themeMode by AppSettings.theme.collectAsState()
 
+    // Версия из манифеста — всегда совпадает с установленной на телефоне
+    val appVersion = remember {
+        try {
+            context.packageManager
+                .getPackageInfo(context.packageName, 0)
+                .versionName ?: "?"
+        } catch (e: PackageManager.NameNotFoundException) {
+            "?"
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Настройки", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, contentDescription = "Назад") }
+                    IconButton(onClick = onBackClick) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
+                    }
                 }
             )
         }
@@ -43,7 +56,11 @@ fun SettingsScreen(onBackClick: () -> Unit) {
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
-            Text("Тема", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(
+                "Оформление",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
             Spacer(modifier = Modifier.height(8.dp))
             ThemeMode.entries.forEach { mode ->
                 ThemeCard(
@@ -54,16 +71,70 @@ fun SettingsScreen(onBackClick: () -> Unit) {
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
-            Text("Скоро", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                "В разработке",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Шаг веса для кнопок «±2.5»",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+                ComingSoonDot()
+            }
+            ComingSoonItem("Напоминания о тренировках")
+            ComingSoonItem("Экспорт истории")
+            ComingSoonItem("Единицы (кг/фунты)")
+
+            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                "О приложении",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                "Шаг веса для кнопок «±2.5» · Напоминания о тренировках · Экспорт истории · Единицы (кг/фунты)",
+                "TrainerApp · версия $appVersion",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
         }
     }
+}
+
+@Composable
+private fun ComingSoonItem(text: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+        )
+        ComingSoonDot()
+    }
+}
+
+// Маленький маркер «в планах» напротив пункта
+@Composable
+private fun ComingSoonDot() {
+    Spacer(modifier = Modifier.width(8.dp))
+    Box(
+        modifier = Modifier
+            .size(6.dp)
+            .background(
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                RoundedCornerShape(50)
+            )
+    )
 }
 
 // Плашки-превью: реальные цвета выбранной темы — фон, поверхность, акцент, текст

@@ -26,6 +26,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.trainerapp.data.local.AppSettings
 import com.example.trainerapp.ui.screens.ClientDetailScreen
 import com.example.trainerapp.ui.screens.ClientHistoryScreen
+import com.example.trainerapp.ui.screens.ClientMeasurementsScreen
 import com.example.trainerapp.ui.screens.ClientProgramDetailScreen
 import com.example.trainerapp.ui.screens.ClientScreen
 import com.example.trainerapp.ui.screens.ClientWorkoutLogScreen
@@ -143,6 +144,9 @@ fun MainScreen() {
                     },
                     onHistoryClick = {
                         navController.navigate("history/$clientId")
+                    },
+                    onMeasurementsClick = { clientId, clientName ->
+                        navController.navigate("client_measurements/$clientId/${URLEncoder.encode(clientName, "UTF-8")}")
                     }
                 )
             }
@@ -184,6 +188,16 @@ fun MainScreen() {
                     ?: return@composable
                 ClientHistoryScreen(
                     clientId = clientId,
+                    onBackClick = { navController.popBackStack() }
+                )
+            }
+            composable("client_measurements/{clientId}/{clientName}") { entry ->
+                val clientId = entry.arguments?.getString("clientId")?.toLongOrNull()
+                    ?: return@composable
+                val clientName = entry.arguments?.getString("clientName") ?: ""
+                ClientMeasurementsScreen(
+                    clientId = clientId,
+                    clientName = clientName,
                     onBackClick = { navController.popBackStack() }
                 )
             }

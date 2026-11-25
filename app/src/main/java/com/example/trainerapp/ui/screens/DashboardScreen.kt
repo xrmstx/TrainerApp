@@ -31,6 +31,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class DashboardViewModel(application: Application) : AndroidViewModel(application) {
     private val dao = AppDatabase.getDatabase(application).appDao()
@@ -83,6 +86,10 @@ private fun statusColor(status: String) = when (status) {
     else -> StatusPlanned
 }
 
+// «Сегодня, 25 ноября» — заголовок дашборда
+private val todayTitleFmt = SimpleDateFormat("d MMMM", Locale("ru"))
+private val todayText = "Сегодня, ${todayTitleFmt.format(Date())}"
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(onWorkoutClick: (Long, String) -> Unit, onSettingsClick: () -> Unit = {}) {
@@ -96,7 +103,7 @@ fun DashboardScreen(onWorkoutClick: (Long, String) -> Unit, onSettingsClick: () 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Сегодня", fontWeight = FontWeight.Bold) },
+                title = { Text(todayText, fontWeight = FontWeight.Bold) },
                 actions = {
                     IconButton(onClick = onSettingsClick) {
                         Icon(Icons.Default.Settings, contentDescription = "Настройки")

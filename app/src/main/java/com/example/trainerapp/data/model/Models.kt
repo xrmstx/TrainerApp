@@ -173,6 +173,31 @@ data class ExerciseLog(
     val date: Long = System.currentTimeMillis()
 )
 
+// Замеры клиента: любые поля опциональны — записываем только то, что замеряли
+@Entity(
+    tableName = "measurements",
+    foreignKeys = [ForeignKey(
+        entity = Client::class,
+        parentColumns = ["id"],
+        childColumns = ["clientId"],
+        onDelete = ForeignKey.CASCADE
+    )],
+    indices = [Index("clientId")]
+)
+data class ClientMeasurement(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val clientId: Long,
+    val date: Long = System.currentTimeMillis(),
+    val weightKg: Double? = null,   // вес
+    val heightCm: Double? = null,   // рост
+    val chest: Double? = null,      // грудь
+    val waist: Double? = null,      // талия
+    val hips: Double? = null,       // бёдра
+    val arm: Double? = null,        // рука (бицепс)
+    val thigh: Double? = null,      // бедро
+    val note: String? = null
+)
+
 data class TodayWorkout(
     val workoutId: Long,
     val workoutName: String,

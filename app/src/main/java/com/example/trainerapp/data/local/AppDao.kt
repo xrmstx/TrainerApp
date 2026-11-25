@@ -20,6 +20,16 @@ interface AppDao {
     @Query("DELETE FROM clients WHERE id = :clientId")
     suspend fun deleteClient(clientId: Long)
 
+    // --- Замеры клиента ---
+    @Query("SELECT * FROM measurements WHERE clientId = :clientId ORDER BY date DESC")
+    fun getMeasurements(clientId: Long): Flow<List<ClientMeasurement>>
+
+    @Insert
+    suspend fun insertMeasurement(m: ClientMeasurement)
+
+    @Delete
+    suspend fun deleteMeasurement(m: ClientMeasurement)
+
     // --- Шаблоны (макроциклы) ---
     @Query("SELECT * FROM macrocycles")
     fun getAllMacrocycles(): Flow<List<Macrocycle>>

@@ -12,9 +12,9 @@ import com.example.trainerapp.data.model.*
     entities = [
         Client::class, Macrocycle::class, Workout::class, ExerciseBlock::class,
         TemplateExercise::class, ClientProgram::class, ClientWorkout::class,
-        ClientExercise::class, ExerciseLog::class
+        ClientExercise::class, ExerciseLog::class, ClientMeasurement::class
     ],
-    version = 12,
+    version = 13,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -93,6 +93,32 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // Замеры клиента: таблица создаётся с нуля, все числовые поля опциональны.
+        private val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS `measurements` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `clientId` INTEGER NOT NULL,
+                        `date` INTEGER NOT NULL,
+                        `weightKg` REAL,
+                        `heightCm` REAL,
+                        `chest` REAL,
+                        `waist` REAL,
+                        `hips` REAL,
+                        `arm` REAL,
+                        `thigh` REAL,
+                        `note` TEXT,
+                        FOREIGN KEY(`clientId`) REFERENCES `clients`(`id`)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )"""
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_measurements_clientId` ON `measurements`(`clientId`)"
+                )
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -100,7 +126,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "fitness_database"
                 )
-                    .addMigrations(MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12)
+                    .addMigrations(MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
                     .build()
                 INSTANCE = instance
                 instance

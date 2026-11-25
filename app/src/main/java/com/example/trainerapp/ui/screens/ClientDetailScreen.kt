@@ -161,7 +161,8 @@ fun ClientDetailScreen(
     clientId: Long,
     onBackClick: () -> Unit,
     onProgramClick: (Long, String) -> Unit,
-    onHistoryClick: () -> Unit
+    onHistoryClick: () -> Unit,
+    onMeasurementsClick: () -> Unit
 ) {
     val context = LocalContext.current
     val application = context.applicationContext as Application
@@ -175,7 +176,7 @@ fun ClientDetailScreen(
     val templates by viewModel.templates.collectAsState(initial = emptyList())
     val showDialog by viewModel.showDialog.collectAsState()
     val showEditDialog by viewModel.showEditDialog.collectAsState()
-    val isAssigning by viewModel.isAssigning.collectAsState()
+    val isAssigning by viewModel.isAssigning.assigningAsState()
 
     var programToDelete by remember { mutableStateOf<ClientProgram?>(null) }
     var confirmDeleteClient by remember { mutableStateOf(false) }
@@ -371,6 +372,20 @@ fun ClientDetailScreen(
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(if (isAssigning) "Назначаю..." else "Назначить программу")
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            OutlinedButton(
+                onClick = onMeasurementsClick,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(Icons.Default.MonitorWeight, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Замеры")
             }
 
             Spacer(modifier = Modifier.height(8.dp))
