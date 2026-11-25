@@ -27,6 +27,9 @@ interface AppDao {
     @Insert
     suspend fun insertMacrocycle(macrocycle: Macrocycle): Long
 
+    @Update
+    suspend fun updateMacrocycle(macrocycle: Macrocycle)
+
     @Query("SELECT * FROM macrocycles WHERE id = :macroId")
     suspend fun getMacroSync(macroId: Long): Macrocycle?
 
@@ -34,10 +37,10 @@ interface AppDao {
     suspend fun deleteMacrocycle(macroId: Long)
 
     // --- Тренировки шаблона ---
-    @Query("SELECT * FROM workouts WHERE mesocycleId = :macroId ORDER BY dayNumber ASC")
+    @Query("SELECT * FROM workouts WHERE mesocycleId = :macroId ORDER BY weekNumber ASC, dayNumber ASC")
     fun getWorkoutsForMacro(macroId: Long): Flow<List<Workout>>
 
-    @Query("SELECT * FROM workouts WHERE mesocycleId = :macroId ORDER BY dayNumber ASC")
+    @Query("SELECT * FROM workouts WHERE mesocycleId = :macroId ORDER BY weekNumber ASC, dayNumber ASC")
     suspend fun getWorkoutsForMacroSync(macroId: Long): List<Workout>
 
     @Insert
@@ -46,8 +49,28 @@ interface AppDao {
     @Query("DELETE FROM workouts WHERE id = :workoutId")
     suspend fun deleteWorkout(workoutId: Long)
 
-    @Query("SELECT MAX(dayNumber) FROM workouts WHERE mesocycleId = :macroId")
-    suspend fun getMaxDayNumber(macroId: Long): Int?
+    @Query("SELECT MAX(dayNumber) FROM workouts WHERE mesocycleId = :macroId AND weekNumber = :weekNumber")
+    suspend fun getMaxDayNumber(macroId: Long, weekNumber: Int): Int?
+
+    // --- Недели шаблона ---
+    @Query("SELECT DISTINCT weekNumber FROM workouts WHERE mesocycleId = :macroId ORDER BY weekNumber ASC")
+    suspend fun getWeekNumbersForMacroSync(macroId: Long): List<Int>
+
+    @Query("SELECT MAX(weekNumber) FROM workouts WHERE mesocycleId = :macroId")
+    suspend fun getMaxWeekNumber(macroId: Long): Int?
+
+    @Query("SELECT * FROM workouts WHERE mesocycleId = :macroId AND weekNumber = :weekNumber ORDER BY dayNumber ASC")
+    fun getWorkoutsForMacroWeek(macroId: Long, weekNumber: Int): Flow<List<Workout>>
+
+    @Query("SELECT * FROM workouts WHERE mesocycleId = :macroId AND weekNumber = :weekNumber ORDER BY dayNumber ASC")
+    suspend fun getWorkoutsForMacroWeekSync(macroId: Long, weekNumber: Int): List<Workout>
+
+    @Query("SELECT COUNT(*) FROM workouts WHERE mesocycleId = :macroId AND weekNumber = :weekNumber")
+    suspend fun countWorkoutsInWeek(macroId: Long, weekNumber: Int): Int
+
+    // Полная зачистка недели: используется при перезаписи недели копией
+    @Query("DELETE FROM workouts WHERE mesocycleId = :macroId AND weekNumber = :weekNumber")
+    suspend fun deleteWorkoutsOfWeek(macroId: Long, weekNumber: Int)
 
     // --- Блоки шаблона ---
     @Query("SELECT * FROM exercise_blocks WHERE workoutId = :workoutId ORDER BY `order` ASC, id ASC")
@@ -98,10 +121,13 @@ interface AppDao {
     suspend fun insertClientProgram(program: ClientProgram): Long
 
     // --- Тренировки клиента ---
-    @Query("SELECT * FROM client_workouts WHERE clientProgramId = :programId ORDER BY dayNumber ASC")
+    @Query("SELECT * FROM client_workouts WHERE clientProgramId = :programId ORDER BY weekNumber ASC, dayNumber ASC")
     fun getClientWorkoutsForProgram(programId: Long): Flow<List<ClientWorkout>>
 
-    @Query("SELECT * FROM client_workouts WHERE clientProgramId = :programId ORDER BY dayNumber ASC")
+    @Query("SELECT * FROM client_workouts WHERE clientProgramId = :programId AND weekNumber = :weekNumber ORDER BY dayNumber ASC")
+    fun getClientWorkoutsForProgramWeek(programId: Long, weekNumber: Int): Flow<List<ClientWorkout>>
+
+    @Query("SELECT * FROM client_workouts WHERE clientProgramId = :programId ORDER BY weekNumber ASC, dayNumber ASC")
     suspend fun getClientWorkoutsForProgramSync(programId: Long): List<ClientWorkout>
 
     @Query("SELECT * FROM client_workouts WHERE id = :workoutId")
