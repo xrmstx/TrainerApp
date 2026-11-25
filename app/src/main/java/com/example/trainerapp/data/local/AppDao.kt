@@ -27,6 +27,9 @@ interface AppDao {
     @Insert
     suspend fun insertMacrocycle(macrocycle: Macrocycle): Long
 
+    @Query("SELECT * FROM macrocycles WHERE id = :macroId")
+    suspend fun getMacroSync(macroId: Long): Macrocycle?
+
     @Query("DELETE FROM macrocycles WHERE id = :macroId")
     suspend fun deleteMacrocycle(macroId: Long)
 
@@ -152,6 +155,8 @@ interface AppDao {
         LIMIT 1
     """)
     suspend fun getClientIdForWorkoutSync(workoutId: Long): Long?
+
+    // --- Сводка на сегодня ---
     @Query("""
     SELECT cw.id AS workoutId, cw.name AS workoutName,
            cp.weekNumber AS weekNumber, cw.dayNumber AS dayNumber, cw.status AS status,
@@ -162,9 +167,8 @@ interface AppDao {
     WHERE cw.status = 'PLANNED' AND cp.status != 'DONE'
     ORDER BY c.name, cw.dayNumber
 """)
-suspend fun getTodayWorkoutsSync(): List<TodayWorkout>
+    suspend fun getTodayWorkoutsSync(): List<TodayWorkout>
+
     @Query("SELECT COUNT(*) FROM clients")
-suspend fun getClientsCountSync(): Int
-
-
+    suspend fun getClientsCountSync(): Int
 }
