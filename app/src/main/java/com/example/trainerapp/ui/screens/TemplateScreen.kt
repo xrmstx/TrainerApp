@@ -19,6 +19,17 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.trainerapp.data.model.Macrocycle
 import com.example.trainerapp.ui.viewmodel.TemplateViewModel
+import androidx.compose.material.icons.filled.Assignment
+import com.example.trainerapp.ui.components.EmptyState
+
+if (macrocycles.isEmpty()) {
+    EmptyState(
+        icon = Icons.Default.Assignment,
+        title = "Нет шаблонов",
+        subtitle = "Создайте первый шаблон: название, длительность и число тренировок в неделю — неделя 1 сгенерируется сама."
+    )
+} else { LazyColumn { /* как было */ } }
+
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
