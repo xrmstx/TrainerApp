@@ -72,22 +72,7 @@ fun SettingsScreen(onBackClick: () -> Unit) {
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-            Divider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                "В разработке",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            ComingSoonItem("Шаг веса для кнопок «±2.5»")
-            ComingSoonItem("Напоминания о тренировках")
-            ComingSoonItem("Экспорт истории")
-            ComingSoonItem("Единицы (кг/фунты)")
-
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
             Text(
                 "О приложении",
@@ -101,29 +86,6 @@ fun SettingsScreen(onBackClick: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
         }
-    }
-}
-
-@Composable
-private fun ComingSoonItem(text: String) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(vertical = 4.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(6.dp)
-                .background(
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
-                    RoundedCornerShape(50)
-                )
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-        )
     }
 }
 

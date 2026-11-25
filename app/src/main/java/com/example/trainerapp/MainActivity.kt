@@ -41,6 +41,19 @@ import java.net.URLEncoder
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Временный перехватчик крашей: пишет стек в файл, чтобы можно было
+        // вытащить причину падения без adb. Уберём после отладки.
+        Thread.setDefaultUncaughtExceptionHandler { t, e ->
+            try {
+                val dir = getExternalFilesDir(null) ?: return@setDefaultUncaughtExceptionHandler
+                java.io.File(dir, "crash.txt").writeText(
+                    "Thread: ${t.name}\n\n" + android.util.Log.getStackTraceString(e)
+                )
+            } catch (_: Exception) {}
+            android.os.Process.killProcess(android.os.Process.myPid())
+        }
+
         // Загружаем сохранённую тему до setContent, чтобы не мигнуть дефолтной
         AppSettings.init(this)
         setContent {
