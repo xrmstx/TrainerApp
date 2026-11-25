@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.trainerapp.data.local.AppSettings
 import com.example.trainerapp.ui.theme.ThemeMode
 import com.example.trainerapp.ui.theme.colorSchemeFor
 
@@ -72,7 +73,7 @@ fun SettingsScreen(onBackClick: () -> Unit) {
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-            HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+            Divider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
@@ -81,20 +82,12 @@ fun SettingsScreen(onBackClick: () -> Unit) {
                 color = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "Шаг веса для кнопок «±2.5»",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
-                ComingSoonDot()
-            }
+            ComingSoonItem("Шаг веса для кнопок «±2.5»")
             ComingSoonItem("Напоминания о тренировках")
             ComingSoonItem("Экспорт истории")
             ComingSoonItem("Единицы (кг/фунты)")
 
-            Spacer(modifier = Modifier.weight(1f))
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
             Text(
                 "О приложении",
@@ -113,28 +106,25 @@ fun SettingsScreen(onBackClick: () -> Unit) {
 
 @Composable
 private fun ComingSoonItem(text: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(vertical = 4.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(6.dp)
+                .background(
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                    RoundedCornerShape(50)
+                )
+        )
+        Spacer(modifier = Modifier.width(8.dp))
         Text(
             text,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
         )
-        ComingSoonDot()
     }
-}
-
-// Маленький маркер «в планах» напротив пункта
-@Composable
-private fun ComingSoonDot() {
-    Spacer(modifier = Modifier.width(8.dp))
-    Box(
-        modifier = Modifier
-            .size(6.dp)
-            .background(
-                MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
-                RoundedCornerShape(50)
-            )
-    )
 }
 
 // Плашки-превью: реальные цвета выбранной темы — фон, поверхность, акцент, текст

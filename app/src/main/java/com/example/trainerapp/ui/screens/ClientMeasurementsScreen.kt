@@ -1,7 +1,6 @@
 package com.example.trainerapp.ui.screens
 
 import android.app.Application
-import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -59,6 +58,7 @@ private val dateFmt = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
 private fun fmt(v: Double?): String =
     v?.let { if (it == it.toLong().toDouble()) it.toLong().toString() else it.toString() } ?: "—"
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ClientMeasurementsScreen(
     clientId: Long,
@@ -159,6 +159,7 @@ fun ClientMeasurementsScreen(
 
     if (showDialog) {
         MeasurementDialog(
+            clientId = clientId,
             onDismiss = { showDialog = false },
             onSave = {
                 viewModel.add(it)
@@ -169,7 +170,11 @@ fun ClientMeasurementsScreen(
 }
 
 @Composable
-private fun MeasurementDialog(onDismiss: () -> Unit, onSave: (ClientMeasurement) -> Unit) {
+private fun MeasurementDialog(
+    clientId: Long,
+    onDismiss: () -> Unit,
+    onSave: (ClientMeasurement) -> Unit
+) {
     var weight by remember { mutableStateOf("") }
     var height by remember { mutableStateOf("") }
     var chest by remember { mutableStateOf("") }
@@ -185,33 +190,63 @@ private fun MeasurementDialog(onDismiss: () -> Unit, onSave: (ClientMeasurement)
         onDismissRequest = onDismiss,
         title = { Text("Новый замер") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                val fields = listOf(
-                    "Вес, кг" to { s: String -> weight = s },
-                    "Рост, см" to { s: String -> height = s },
-                    "Грудь, см" to { s: String -> chest = s },
-                    "Талия, см" to { s: String -> waist = s },
-                    "Бёдра, см" to { s: String -> hips = s },
-                    "Рука, см" to { s: String -> arm = s },
-                    "Бедро, см" to { s: String -> thigh = s }
+            Column {
+                OutlinedTextField(
+                    value = weight,
+                    onValueChange = { weight = it },
+                    label = { Text("Вес, кг") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
                 )
-                fields.forEach { (label, setter) ->
-                    OutlinedTextField(
-                        value = when (label) {
-                            "Вес, кг" -> weight
-                            "Рост, см" -> height
-                            "Грудь, см" -> chest
-                            "Талия, см" -> waist
-                            "Бёдра, см" -> hips
-                            "Рука, см" -> arm
-                            else -> thigh
-                        },
-                        onValueChange = setter,
-                        label = { Text(label) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = height,
+                    onValueChange = { height = it },
+                    label = { Text("Рост, см") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = chest,
+                    onValueChange = { chest = it },
+                    label = { Text("Грудь, см") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = waist,
+                    onValueChange = { waist = it },
+                    label = { Text("Талия, см") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = hips,
+                    onValueChange = { hips = it },
+                    label = { Text("Бёдра, см") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = arm,
+                    onValueChange = { arm = it },
+                    label = { Text("Рука, см") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = thigh,
+                    onValueChange = { thigh = it },
+                    label = { Text("Бедро, см") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
                     value = note,
                     onValueChange = { note = it },
@@ -224,7 +259,7 @@ private fun MeasurementDialog(onDismiss: () -> Unit, onSave: (ClientMeasurement)
             TextButton(onClick = {
                 onSave(
                     ClientMeasurement(
-                        clientId = 0L, // подставит экран — см. ниже
+                        clientId = clientId,
                         weightKg = parse(weight),
                         heightCm = parse(height),
                         chest = parse(chest),
