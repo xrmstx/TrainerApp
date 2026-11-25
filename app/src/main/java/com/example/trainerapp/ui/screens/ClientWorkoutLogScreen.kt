@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.EventNote
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,6 +31,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.trainerapp.data.local.AppDatabase
 import com.example.trainerapp.data.model.ClientExercise
 import com.example.trainerapp.data.model.ExerciseLog
+import com.example.trainerapp.ui.components.EmptyState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -128,9 +130,6 @@ class ClientWorkoutLogViewModelFactory(
     }
 }
 
-fun formatWeight(w: Double): String =
-    if (w == w.toLong().toDouble()) w.toLong().toString() else w.toString()
-
 // Человекочитаемая подпись протокола для клиентского упражнения
 private fun protocolLabel(ex: ClientExercise): String? {
     if (ex.blockType != "CIRCUIT" || ex.protocol == "NONE") return null
@@ -221,9 +220,11 @@ fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: ()
     ) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)) {
             if (exercises.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("В этой тренировке нет упражнений.", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f))
-                }
+                EmptyState(
+                    icon = Icons.Default.EventNote,
+                    title = "Пустая тренировка",
+                    subtitle = "В этой тренировке нет упражнений — попросите тренера дополнить план."
+                )
             } else {
                 val grouped = exercises.groupBy { it.blockTitle }
                 LazyColumn {
