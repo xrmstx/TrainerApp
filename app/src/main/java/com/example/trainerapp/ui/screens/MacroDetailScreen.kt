@@ -25,6 +25,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.trainerapp.data.local.AppDatabase
+import com.example.trainerapp.data.model.Macrocycle
 import com.example.trainerapp.data.model.Workout
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -40,6 +41,11 @@ class MacroDetailViewModel(application: Application, val macroId: Long) : Androi
     private val _workoutName = MutableStateFlow("")
     val workoutName: StateFlow<String> = _workoutName.asStateFlow()
 
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+
+    fun clearError() { _error.value = null }
+
     fun onNameChange(name: String) { _workoutName.value = name }
     fun openDialog() { _showDialog.value = true; _workoutName.value = "" }
     fun closeDialog() { _showDialog.value = false; _workoutName.value = "" }
@@ -48,14 +54,29 @@ class MacroDetailViewModel(application: Application, val macroId: Long) : Androi
         val name = _workoutName.value.trim()
         if (name.isEmpty()) return
         viewModelScope.launch {
-            val maxDay = dao.getMaxDayNumber(macroId) ?: 0
-            dao.insertWorkout(Workout(mesocycleId = macroId, dayNumber = maxDay + 1, name = name))
-            closeDialog()
+            try {
+                val macro = dao.getMacroSync(macroId)
+                if (macro == null) {
+                    _error.value = "Макроцикл id=$macroId не найден в базе. На экран передан неверный id."
+                    return@launch
+                }
+                val maxDay = dao.getMaxDayNumber(macroId) ?: 0
+                dao.insertWorkout(Workout(mesocycleId = macroId, dayNumber = maxDay + 1, name = name))
+                closeDialog()
+            } catch (e: Exception) {
+                _error.value = e.message ?: e.toString()
+            }
         }
     }
 
     fun deleteWorkout(id: Long) {
-        viewModelScope.launch { dao.deleteWorkout(id) } // каскад удалит блоки и упражнения
+        viewModelScope.launch {
+            try {
+                dao.deleteWorkout(id) // каскад удалит блоки и упражнения
+            } catch (e: Exception) {
+                _error.value = e.message ?: e.toString()
+            }
+        }
     }
 
     fun shareProgram(macroName: String, onReady: (String) -> Unit) {
@@ -99,8 +120,18 @@ fun MacroDetailScreen(macroId: Long, macroName: String, onBackClick: () -> Unit,
     val workouts by viewModel.workouts.collectAsState(initial = emptyList())
     val showDialog by viewModel.showDialog.collectAsState()
     val workoutName by viewModel.workoutName.collectAsState()
+    val error by viewModel.error.collectAsState()
 
     var workoutToDelete by remember { mutableStateOf<Workout?>(null) }
+
+    error?.let { message ->
+        AlertDialog(
+            onDismissRequest = { viewModel.clearError() },
+            title = { Text("Ошибка") },
+            text = { Text(message) },
+            confirmButton = { TextButton(onClick = { viewModel.clearError() }) { Text("Понятно") } }
+        )
+    }
 
     if (workoutToDelete != null) {
         AlertDialog(
