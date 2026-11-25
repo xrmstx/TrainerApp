@@ -47,3 +47,14 @@ val StatusPlanned = Color(0xFF90A4AE)
 // Ошибки
 val ErrorLight = Color(0xFFBA1A1A)
 val ErrorDark = Color(0xFFFFB4AB)
+// Градиенты аватаров клиентов: цвет подбирается по id клиента
+val AvatarGradients: List<List<Color>> = listOf(
+    listOf(Color(0xFFFF7043), Color(0xFFFF8A65)),
+    listOf(Color(0xFF4DB6AC), Color(0xFF80CBC4)),
+    listOf(Color(0xFFF06292), Color(0xFFF48FB1)),
+    listOf(Color(0xFF7E57C2), Color(0xFFB39DDB)),
+    listOf(Color(0xFF66BB6A), Color(0xFFA5D6A7)),
+    listOf(Color(0xFF42A5F5), Color(0xFF90CAF9)),
+    listOf(Color(0xFFFFCA28), Color(0xFFFFE082)),
+    listOf(Color(0xFF8D6E63), Color(0xFFBCAAA4))
+)
