@@ -2,7 +2,9 @@ package com.example.trainerapp.ui.theme
 
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 
 enum class ThemeMode(
     val label: String,
@@ -39,6 +41,6 @@ fun TrainerAppTheme(
     MaterialTheme(
         colorScheme = colorSchemeFor(themeMode),
         typography = AppTypography,
-        content = content
+        content = { CompositionLocalProvider(LocalContentColor provides colorSchemeFor(themeMode).onSurface) { content() } }
     )
 }
