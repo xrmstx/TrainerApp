@@ -16,10 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,16 +27,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
-import androidx.navigation.NavHostController
 import androidx.navigation.NavBackStackEntry
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.trainerapp.data.local.AppSettings
+import com.example.trainerapp.ui.components.DockItem
+import com.example.trainerapp.ui.components.FloatingBottomBar
 import com.example.trainerapp.ui.screens.ClientDetailScreen
 import com.example.trainerapp.ui.screens.ClientHistoryScreen
 import com.example.trainerapp.ui.screens.ClientMeasurementsScreen
@@ -49,6 +47,7 @@ import com.example.trainerapp.ui.screens.ClientWorkoutLogScreen
 import com.example.trainerapp.ui.screens.DashboardScreen
 import com.example.trainerapp.ui.screens.MacroDetailScreen
 import com.example.trainerapp.ui.screens.SettingsScreen
+import com.example.trainerapp.ui.screens.SplashScreen
 import com.example.trainerapp.ui.screens.TemplateScreen
 import com.example.trainerapp.ui.screens.WorkoutDetailScreen
 import com.example.trainerapp.ui.theme.ThemeMode
@@ -93,11 +92,11 @@ class MainActivity : ComponentActivity() {
                 window.statusBarColor = scheme.background.toArgb()
                 window.navigationBarColor = scheme.background.toArgb()
             }
-            // Цвет иконок статус-бара: тёмные только на светлой теме
+            // Светлые иконки — только на светлых темах (isLight объявлен в enum)
             SideEffect {
                 WindowCompat.getInsetsController(window, view).apply {
-                    isAppearanceLightStatusBars = (themeMode == ThemeMode.LIGHT)
-                    isAppearanceLightNavigationBars = (themeMode == ThemeMode.LIGHT)
+                    isAppearanceLightStatusBars = themeMode.isLight
+                    isAppearanceLightNavigationBars = themeMode.isLight
                 }
             }
 
@@ -107,8 +106,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-
-private data class BottomItem(val route: String, val label: String, val icon: ImageVector)
 
 private fun NavBackStackEntry.longArg(name: String): Long? =
     arguments?.getString(name)?.toLongOrNull()
@@ -128,9 +125,9 @@ fun MainScreen() {
     val navController: NavHostController = rememberNavController()
 
     val bottomItems = listOf(
-        BottomItem("dashboard", "Сегодня", Icons.Default.Home),
-        BottomItem("clients", "Клиенты", Icons.Default.Person),
-        BottomItem("templates", "Шаблоны", Icons.Default.List)
+        DockItem("dashboard", "Сегодня", Icons.Default.Home),
+        DockItem("clients", "Клиенты", Icons.Default.Person),
+        DockItem("templates", "Шаблоны", Icons.Default.List)
     )
 
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -146,28 +143,23 @@ fun MainScreen() {
                 enter = slideInVertically(tween(200)) { it } + fadeIn(tween(200)),
                 exit = slideOutVertically(tween(200)) { it } + fadeOut(tween(200))
             ) {
-                NavigationBar {
-                    bottomItems.forEach { item ->
-                        NavigationBarItem(
-                            selected = currentRoute == item.route,
-                            onClick = {
-                                navController.navigate(item.route) {
-                                    popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
-                            icon = { Icon(item.icon, contentDescription = item.label) },
-                            label = { Text(item.label) }
-                        )
+                FloatingBottomBar(
+                    items = bottomItems,
+                    currentRoute = currentRoute,
+                    onItemClick = { route ->
+                        navController.navigate(route) {
+                            popUpTo(navController.graph.startDestinationId) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
                     }
-                }
+                )
             }
         }
     ) { paddingValues ->
         NavHost(
             navController = navController,
-            startDestination = "dashboard",
+            startDestination = "splash",
             modifier = Modifier.padding(paddingValues),
             // Плавные переходы: вперёд — появление снизу с фейдом,
             // назад — лёгкий уход вниз с фейдом
@@ -184,6 +176,13 @@ fun MainScreen() {
                 fadeOut(tween(200)) + slideOutVertically(tween(250)) { it / 12 }
             }
         ) {
+            composable("splash") {
+                SplashScreen(onReady = {
+                    navController.navigate("dashboard") {
+                        popUpTo("splash") { inclusive = true }
+                    }
+                })
+            }
             composable("dashboard") {
                 DashboardScreen(
                     onWorkoutClick = { workoutId, workoutName ->
