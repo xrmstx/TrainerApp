@@ -80,7 +80,8 @@ data class TemplateExercise(
     val targetReps: String,
     val targetWeight: Double?,
     val note: String? = null,
-    val metricType: String = "REPS" // REPS, WEIGHT, TIME, DISTANCE, CALORIES
+    val metricType: String = "REPS", // REPS, WEIGHT, TIME, DISTANCE, CALORIES
+    val supersetGroup: Int? = null   // null = одиночное; одинаковый номер = связка A1/A2/A3
 )
 
 // Имя программы копируем при назначении: если шаблон удалят, программа останется с внятным названием
