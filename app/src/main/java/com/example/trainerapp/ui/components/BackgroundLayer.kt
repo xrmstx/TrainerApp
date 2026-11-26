@@ -13,7 +13,7 @@ import androidx.compose.ui.res.painterResource
 @Composable
 fun BackgroundLayer(
     imageResId: Int,
-    overlayAlpha: Float = 0.8f,
+    overlayAlpha: Float = 0.9f,
     content: @Composable () -> Unit
 ) {
     Box(modifier = Modifier.fillMaxSize()) {

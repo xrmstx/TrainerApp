@@ -26,6 +26,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
@@ -35,7 +36,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.trainerapp.R
 import com.example.trainerapp.data.local.AppSettings
+import com.example.trainerapp.ui.components.BackgroundLayer
 import com.example.trainerapp.ui.components.DockItem
 import com.example.trainerapp.ui.components.FloatingBottomBar
 import com.example.trainerapp.ui.screens.ClientDetailScreen
@@ -135,6 +138,8 @@ fun MainScreen() {
     val showBottomBar = bottomItems.any { it.route == currentRoute }
 
     Scaffold(
+        // Прозрачный фон: пусть сквозь него виден BackgroundLayer с картинкой
+        containerColor = Color.Transparent,
         bottomBar = {
             // Панель не убираем из дерева условием, а прячем анимацией —
             // обход бага slot table при пересборке подвкладки Scaffold
@@ -157,157 +162,160 @@ fun MainScreen() {
             }
         }
     ) { paddingValues ->
-        NavHost(
-            navController = navController,
-            startDestination = "splash",
-            modifier = Modifier.padding(paddingValues),
-            // Плавные переходы: вперёд — появление снизу с фейдом,
-            // назад — лёгкий уход вниз с фейдом
-            enterTransition = {
-                fadeIn(tween(250)) + slideInVertically(tween(250)) { it / 12 }
-            },
-            exitTransition = {
-                fadeOut(tween(200))
-            },
-            popEnterTransition = {
-                fadeIn(tween(250)) + slideInVertically(tween(250)) { -it / 12 }
-            },
-            popExitTransition = {
-                fadeOut(tween(200)) + slideOutVertically(tween(250)) { it / 12 }
-            }
-        ) {
-            composable("splash") {
-                SplashScreen(onReady = {
-                    navController.navigate("dashboard") {
-                        popUpTo("splash") { inclusive = true }
-                    }
-                })
-            }
-            composable("dashboard") {
-                DashboardScreen(
-                    onWorkoutClick = { workoutId, workoutName ->
-                        navController.navigate("workout_log/$workoutId/${encodeArg(workoutName)}")
-                    },
-                    onSettingsClick = { navController.navigate("settings") }
-                )
-            }
-            composable("settings") {
-                SettingsScreen(onBackClick = { navController.popBackStack() })
-            }
-            composable("clients") {
-                ClientScreen(
-                    onClientClick = { clientId ->
-                        navController.navigate("client/$clientId")
-                    }
-                )
-            }
-            composable("templates") {
-                TemplateScreen(
-                    onMacroClick = { macroId, macroName ->
-                        navController.navigate("macro_detail/$macroId/${encodeArg(macroName)}")
-                    }
-                )
-            }
-            composable("macro_detail/{macroId}/{macroName}") { entry ->
-                val macroId = entry.longArg("macroId")
-                val macroName = entry.arguments?.getString("macroName") ?: ""
-                if (macroId == null) {
-                    InvalidScreen("Ошибка навигации")
-                } else {
-                    MacroDetailScreen(
-                        macroId = macroId,
-                        macroName = macroName,
-                        onBackClick = { navController.popBackStack() },
-                        onWorkoutClick = { workoutId, workoutName ->
-                            navController.navigate("workout_detail/$workoutId/${encodeArg(workoutName)}")
-                        }
-                    )
+        // Общий фон на всех экранах: картинка + оверлей 90%
+        BackgroundLayer(imageResId = R.drawable.app_background) {
+            NavHost(
+                navController = navController,
+                startDestination = "splash",
+                modifier = Modifier.padding(paddingValues),
+                // Плавные переходы: вперёд — появление снизу с фейдом,
+                // назад — лёгкий уход вниз с фейдом
+                enterTransition = {
+                    fadeIn(tween(250)) + slideInVertically(tween(250)) { it / 12 }
+                },
+                exitTransition = {
+                    fadeOut(tween(200))
+                },
+                popEnterTransition = {
+                    fadeIn(tween(250)) + slideInVertically(tween(250)) { -it / 12 }
+                },
+                popExitTransition = {
+                    fadeOut(tween(200)) + slideOutVertically(tween(250)) { it / 12 }
                 }
-            }
-            composable("client/{clientId}") { entry ->
-                val clientId = entry.longArg("clientId")
-                if (clientId == null) {
-                    InvalidScreen("Ошибка навигации")
-                } else {
-                    ClientDetailScreen(
-                        clientId = clientId,
-                        onBackClick = { navController.popBackStack() },
-                        onProgramClick = { programId, programName ->
-                            navController.navigate("client_program/$programId/${encodeArg(programName)}")
-                        },
-                        onHistoryClick = {
-                            navController.navigate("history/$clientId")
-                        },
-                        onMeasurementsClick = { cid, clientName ->
-                            navController.navigate("client_measurements/$cid/${encodeArg(clientName)}")
+            ) {
+                composable("splash") {
+                    SplashScreen(onReady = {
+                        navController.navigate("dashboard") {
+                            popUpTo("splash") { inclusive = true }
                         }
-                    )
+                    })
                 }
-            }
-            composable("client_program/{programId}/{programName}") { entry ->
-                val programId = entry.longArg("programId")
-                val programName = entry.arguments?.getString("programName") ?: ""
-                if (programId == null) {
-                    InvalidScreen("Ошибка навигации")
-                } else {
-                    ClientProgramDetailScreen(
-                        programId = programId,
-                        programName = programName,
-                        onBackClick = { navController.popBackStack() },
+                composable("dashboard") {
+                    DashboardScreen(
                         onWorkoutClick = { workoutId, workoutName ->
                             navController.navigate("workout_log/$workoutId/${encodeArg(workoutName)}")
+                        },
+                        onSettingsClick = { navController.navigate("settings") }
+                    )
+                }
+                composable("settings") {
+                    SettingsScreen(onBackClick = { navController.popBackStack() })
+                }
+                composable("clients") {
+                    ClientScreen(
+                        onClientClick = { clientId ->
+                            navController.navigate("client/$clientId")
                         }
                     )
                 }
-            }
-            composable("workout_log/{workoutId}/{workoutName}") { entry ->
-                val workoutId = entry.longArg("workoutId")
-                val workoutName = entry.arguments?.getString("workoutName") ?: ""
-                if (workoutId == null) {
-                    InvalidScreen("Ошибка навигации")
-                } else {
-                    ClientWorkoutLogScreen(
-                        workoutId = workoutId,
-                        workoutName = workoutName,
-                        onBackClick = { navController.popBackStack() }
+                composable("templates") {
+                    TemplateScreen(
+                        onMacroClick = { macroId, macroName ->
+                            navController.navigate("macro_detail/$macroId/${encodeArg(macroName)}")
+                        }
                     )
                 }
-            }
-            composable("workout_detail/{workoutId}/{workoutName}") { entry ->
-                val workoutId = entry.longArg("workoutId")
-                val workoutName = entry.arguments?.getString("workoutName") ?: ""
-                if (workoutId == null) {
-                    InvalidScreen("Ошибка навигации")
-                } else {
-                    WorkoutDetailScreen(
-                        workoutId = workoutId,
-                        workoutName = workoutName,
-                        onBackClick = { navController.popBackStack() }
-                    )
+                composable("macro_detail/{macroId}/{macroName}") { entry ->
+                    val macroId = entry.longArg("macroId")
+                    val macroName = entry.arguments?.getString("macroName") ?: ""
+                    if (macroId == null) {
+                        InvalidScreen("Ошибка навигации")
+                    } else {
+                        MacroDetailScreen(
+                            macroId = macroId,
+                            macroName = macroName,
+                            onBackClick = { navController.popBackStack() },
+                            onWorkoutClick = { workoutId, workoutName ->
+                                navController.navigate("workout_detail/$workoutId/${encodeArg(workoutName)}")
+                            }
+                        )
+                    }
                 }
-            }
-            composable("history/{clientId}") { entry ->
-                val clientId = entry.longArg("clientId")
-                if (clientId == null) {
-                    InvalidScreen("Ошибка навигации")
-                } else {
-                    ClientHistoryScreen(
-                        clientId = clientId,
-                        onBackClick = { navController.popBackStack() }
-                    )
+                composable("client/{clientId}") { entry ->
+                    val clientId = entry.longArg("clientId")
+                    if (clientId == null) {
+                        InvalidScreen("Ошибка навигации")
+                    } else {
+                        ClientDetailScreen(
+                            clientId = clientId,
+                            onBackClick = { navController.popBackStack() },
+                            onProgramClick = { programId, programName ->
+                                navController.navigate("client_program/$programId/${encodeArg(programName)}")
+                            },
+                            onHistoryClick = {
+                                navController.navigate("history/$clientId")
+                            },
+                            onMeasurementsClick = { cid, clientName ->
+                                navController.navigate("client_measurements/$cid/${encodeArg(clientName)}")
+                            }
+                        )
+                    }
                 }
-            }
-            composable("client_measurements/{clientId}/{clientName}") { entry ->
-                val clientId = entry.longArg("clientId")
-                val clientName = entry.arguments?.getString("clientName") ?: ""
-                if (clientId == null) {
-                    InvalidScreen("Ошибка навигации")
-                } else {
-                    ClientMeasurementsScreen(
-                        clientId = clientId,
-                        clientName = clientName,
-                        onBackClick = { navController.popBackStack() }
-                    )
+                composable("client_program/{programId}/{programName}") { entry ->
+                    val programId = entry.longArg("programId")
+                    val programName = entry.arguments?.getString("programName") ?: ""
+                    if (programId == null) {
+                        InvalidScreen("Ошибка навигации")
+                    } else {
+                        ClientProgramDetailScreen(
+                            programId = programId,
+                            programName = programName,
+                            onBackClick = { navController.popBackStack() },
+                            onWorkoutClick = { workoutId, workoutName ->
+                                navController.navigate("workout_log/$workoutId/${encodeArg(workoutName)}")
+                            }
+                        )
+                    }
+                }
+                composable("workout_log/{workoutId}/{workoutName}") { entry ->
+                    val workoutId = entry.longArg("workoutId")
+                    val workoutName = entry.arguments?.getString("workoutName") ?: ""
+                    if (workoutId == null) {
+                        InvalidScreen("Ошибка навигации")
+                    } else {
+                        ClientWorkoutLogScreen(
+                            workoutId = workoutId,
+                            workoutName = workoutName,
+                            onBackClick = { navController.popBackStack() }
+                        )
+                    }
+                }
+                composable("workout_detail/{workoutId}/{workoutName}") { entry ->
+                    val workoutId = entry.longArg("workoutId")
+                    val workoutName = entry.arguments?.getString("workoutName") ?: ""
+                    if (workoutId == null) {
+                        InvalidScreen("Ошибка навигации")
+                    } else {
+                        WorkoutDetailScreen(
+                            workoutId = workoutId,
+                            workoutName = workoutName,
+                            onBackClick = { navController.popBackStack() }
+                        )
+                    }
+                }
+                composable("history/{clientId}") { entry ->
+                    val clientId = entry.longArg("clientId")
+                    if (clientId == null) {
+                        InvalidScreen("Ошибка навигации")
+                    } else {
+                        ClientHistoryScreen(
+                            clientId = clientId,
+                            onBackClick = { navController.popBackStack() }
+                        )
+                    }
+                }
+                composable("client_measurements/{clientId}/{clientName}") { entry ->
+                    val clientId = entry.longArg("clientId")
+                    val clientName = entry.arguments?.getString("clientName") ?: ""
+                    if (clientId == null) {
+                        InvalidScreen("Ошибка навигации")
+                    } else {
+                        ClientMeasurementsScreen(
+                            clientId = clientId,
+                            clientName = clientName,
+                            onBackClick = { navController.popBackStack() }
+                        )
+                    }
                 }
             }
         }
