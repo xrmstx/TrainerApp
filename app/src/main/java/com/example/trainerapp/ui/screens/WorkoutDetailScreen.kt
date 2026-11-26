@@ -79,6 +79,9 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
     val exMetric: StateFlow<String> = _exMetric.asStateFlow()
     val exType: StateFlow<String> = _exType.asStateFlow()
 
+    private val _exInSuperset = MutableStateFlow(false)
+    val exInSuperset: StateFlow<Boolean> = _exInSuperset.asStateFlow()
+
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
     private val _showLibrary = MutableStateFlow(false)
@@ -158,11 +161,13 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
             _exNote.value = ex.note ?: ""
             _exMetric.value = ex.metricType
             _exType.value = if (ex.targetSets == 0) "CIRCUIT" else "LINEAR"
+            _exInSuperset.value = ex.supersetGroup != null
         } else {
             // Тип упражнения наследуется от блока: в Circuit-блоке — Circuit, иначе Linear
             _exName.value = ""; _exSets.value = ""; _exReps.value = ""; _exNote.value = ""
             _exMetric.value = "REPS"
             _exType.value = if (block.blockType == "CIRCUIT") "CIRCUIT" else "LINEAR"
+            _exInSuperset.value = false
         }
     }
 
@@ -179,6 +184,7 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
     fun onNoteChange(note: String) { _exNote.value = note }
     fun onMetricChange(metric: String) { _exMetric.value = metric }
     fun onTypeChange(type: String) { _exType.value = type }
+    fun onSupersetChange(inSuperset: Boolean) { _exInSuperset.value = inSuperset }
 
     fun loadLibrary() { _showLibrary.value = true }
     fun closeLibrary() { _showLibrary.value = false }
@@ -203,6 +209,15 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
         // В Circuit у упражнения может не быть повторений — метрика (метры, ккал, время) важнее
         if (!isCircuit && (reps.isEmpty() || sets <= 0)) return
 
+        val inSuperset = _exInSuperset.value && !isCircuit
+        var supersetGroup: Int? = null
+        if (inSuperset) {
+            val all = dao.getExercisesForBlockSync(blockId).sortedBy { it.order }
+            val others = if (existing != null) all.filter { it.id != existing.id } else all
+            val prev = others.lastOrNull()
+            supersetGroup = prev?.supersetGroup ?: ((others.mapNotNull { it.supersetGroup }.maxOrNull() ?: 0) + 1)
+        }
+
         viewModelScope.launch {
             try {
                 if (existing != null) {
@@ -212,7 +227,8 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
                             targetSets = sets,
                             targetReps = reps,
                             note = note.ifEmpty { null },
-                            metricType = metric
+                            metricType = metric,
+                            supersetGroup = supersetGroup
                         )
                     )
                 } else {
@@ -226,7 +242,8 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
                             targetReps = reps,
                             targetWeight = null,
                             note = note.ifEmpty { null },
-                            metricType = metric
+                            metricType = metric,
+                            supersetGroup = supersetGroup
                         )
                     )
                 }
