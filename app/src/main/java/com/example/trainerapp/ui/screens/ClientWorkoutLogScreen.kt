@@ -1,6 +1,7 @@
 package com.example.trainerapp.ui.screens
 
 import android.app.Application
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -17,7 +18,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -156,6 +159,8 @@ fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: ()
     val lastWeights by viewModel.lastWeights.collectAsState()
     val isDone by viewModel.isDone.collectAsState()
 
+    val keyboard = LocalSoftwareKeyboardController.current
+
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
@@ -227,7 +232,14 @@ fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: ()
                 )
             } else {
                 val grouped = exercises.groupBy { it.blockTitle }
-                LazyColumn {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        // Тап по пустому месту списка прячет клавиатуру
+                        .pointerInput(Unit) {
+                            detectTapGestures(onTap = { keyboard?.hide() })
+                        }
+                ) {
                     grouped.forEach { (blockTitle, list) ->
                         item(key = "header_$blockTitle") {
                             Text(blockTitle, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(vertical = 8.dp))
@@ -249,6 +261,7 @@ fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: ()
                             var freeResult by remember(ex.id) { mutableStateOf("") }
                             var circuitError by remember(ex.id) { mutableStateOf(false) }
 
+                            // Первичная подстановка последнего веса из базы (до первой записи в этой сессии)
                             LaunchedEffect(lastWeights) {
                                 if (!isCircuit && weight.isEmpty()) {
                                     lastWeights[ex.id]?.let { weight = formatWeight(it) }
@@ -493,7 +506,9 @@ fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: ()
                                                 val over = if (targetSets > 0 && s > targetSets) " (сверх плана)" else ""
                                                 showSavedSnackbar("Записано: подход $s, ${weight.trim().ifEmpty { "0" }} кг$over")
                                                 setNum = (s + 1).toString()
-                                                weight = ""
+                                                // Вес НЕ сбрасываем: он остаётся в поле
+                                                // и автоматически становится весом следующего подхода.
+                                                // LaunchedEffect выше нужен только для первой подстановки из базы.
                                             }
                                             note = ""
                                         },
