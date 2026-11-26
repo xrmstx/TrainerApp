@@ -1,4 +1,3 @@
-cat > app/src/main/java/com/example/trainerapp/ui/components/BackgroundLayer.kt << 'EOF'
 package com.example.trainerapp.ui.components
 
 import androidx.compose.foundation.Image
@@ -32,4 +31,3 @@ fun BackgroundLayer(
         content()
     }
 }
-EOF
