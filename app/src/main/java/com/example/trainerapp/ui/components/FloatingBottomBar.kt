@@ -1,4 +1,5 @@
 package com.example.trainerapp.ui.components
+import androidx.compose.foundation.layout.padding
 
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
