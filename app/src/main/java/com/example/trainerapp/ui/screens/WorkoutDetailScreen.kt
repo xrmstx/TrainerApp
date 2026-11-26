@@ -211,15 +211,15 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
 
         val inSuperset = _exInSuperset.value && !isCircuit
         var supersetGroup: Int? = null
-        if (inSuperset) {
-            val all = dao.getExercisesForBlockSync(blockId).sortedBy { it.order }
-            val others = if (existing != null) all.filter { it.id != existing.id } else all
-            val prev = others.lastOrNull()
-            supersetGroup = prev?.supersetGroup ?: ((others.mapNotNull { it.supersetGroup }.maxOrNull() ?: 0) + 1)
-        }
 
         viewModelScope.launch {
             try {
+                if (inSuperset) {
+                    val all = dao.getExercisesForBlockSync(blockId).sortedBy { it.order }
+                    val others = if (existing != null) all.filter { it.id != existing.id } else all
+                    val prev = others.lastOrNull()
+                    supersetGroup = prev?.supersetGroup ?: ((others.mapNotNull { it.supersetGroup }.maxOrNull() ?: 0) + 1)
+                }
                 if (existing != null) {
                     dao.updateTemplateExercise(
                         existing.copy(
