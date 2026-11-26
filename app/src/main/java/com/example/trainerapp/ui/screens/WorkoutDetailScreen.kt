@@ -333,6 +333,7 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
     val showLibrary by viewModel.showLibrary.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val blockError by viewModel.blockError.collectAsState()
+    val exInSuperset by viewModel.exInSuperset.collectAsState()
 
     var blockToDelete by remember { mutableStateOf<ExerciseBlock?>(null) }
 
@@ -509,6 +510,13 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
                             )
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    FilterChip(
+                        selected = exInSuperset,
+                        onClick = { viewModel.onSupersetChange(!exInSuperset) },
+                        label = { Text("В связку с предыдущим") }
+                    )
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = exNote,
