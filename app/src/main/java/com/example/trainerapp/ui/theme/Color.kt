@@ -95,9 +95,7 @@ val DarkOutline = Color(0xFF494949)
 
 // Светлая тема
 val LightBackground = Color(0xFFFCF8F5)
-val LightSurface = Color(0xFFFFFFFF)
 val LightSurfaceVariant = Color(0xFFF3E9E4)
-val LightText = Color(0xFF201A17)
 val LightTextSecondary = Color(0xFF5D4A42)
 val LightOutline = Color(0xFF85736C)
 
