@@ -108,6 +108,8 @@ fun ClientScreen(onClientClick: (Long) -> Unit) {
     }
 
     Scaffold(
+    containerColor = Color.Transparent,
+    
         floatingActionButton = {
             FloatingActionButton(onClick = { showAddDialog = true }) {
                 Icon(Icons.Default.Add, contentDescription = "Добавить клиента")

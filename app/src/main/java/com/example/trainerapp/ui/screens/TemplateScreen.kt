@@ -1,5 +1,6 @@
 package com.example.trainerapp.ui.screens
 
+import androidx.compose.ui.graphics.Color
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -49,7 +50,9 @@ fun TemplateScreen(onMacroClick: (Long, String) -> Unit, viewModel: TemplateView
         )
     }
 
-    Scaffold(topBar = { TopAppBar(title = { Text("Шаблоны программ", fontWeight = FontWeight.Bold) }) }) { paddingValues ->
+    Scaffold(
+    containerColor = Color.Transparent,
+    topBar = { TopAppBar(title = { Text("Шаблоны программ", fontWeight = FontWeight.Bold) }) }) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),

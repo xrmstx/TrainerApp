@@ -13,7 +13,7 @@ import androidx.compose.ui.res.painterResource
 @Composable
 fun BackgroundLayer(
     imageResId: Int,
-    overlayAlpha: Float = 0.9f,
+    overlayAlpha: Float = 0.85f,  // <-- Теперь здесь 85% затемнения
     content: @Composable () -> Unit
 ) {
     Box(modifier = Modifier.fillMaxSize()) {

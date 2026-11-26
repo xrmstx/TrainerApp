@@ -2,6 +2,7 @@ package com.example.trainerapp.ui.screens
 
 import android.app.Application
 import android.content.Intent
+import androidx.compose.ui.graphics.Color
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -379,6 +380,8 @@ fun MacroDetailScreen(macroId: Long, macroName: String, onBackClick: () -> Unit,
     }
 
     Scaffold(
+    containerColor = Color.Transparent,
+    
         topBar = {
             TopAppBar(
                 title = { Text(macroName, fontWeight = FontWeight.Bold) },

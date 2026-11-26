@@ -1,6 +1,7 @@
 package com.example.trainerapp.ui.screens
 
 import android.app.Application
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -146,6 +147,8 @@ fun ClientHistoryScreen(clientId: Long, onBackClick: () -> Unit) {
     val dateFormat = remember { java.text.SimpleDateFormat("d MMMM yyyy", java.util.Locale("ru")) }
 
     Scaffold(
+    containerColor = Color.Transparent,
+    
         topBar = {
             TopAppBar(
                 title = { Text("История тренировок", fontWeight = FontWeight.Bold) },

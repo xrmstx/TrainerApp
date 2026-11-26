@@ -1,6 +1,7 @@
 package com.example.trainerapp.ui.screens
 
 import android.app.Application
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -204,6 +205,8 @@ fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: ()
     }
 
     Scaffold(
+    containerColor = Color.Transparent,
+    
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(

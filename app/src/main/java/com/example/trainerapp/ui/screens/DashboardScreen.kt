@@ -1,5 +1,6 @@
 package com.example.trainerapp.ui.screens
 
+import androidx.compose.ui.graphics.Color
 import android.app.Application
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -100,8 +101,9 @@ fun DashboardScreen(onWorkoutClick: (Long, String) -> Unit, onSettingsClick: () 
     val clientsCount by viewModel.clientsCount.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
 
-    Scaffold(
-        topBar = {
+Scaffold(
+    containerColor = Color.Transparent,
+    topBar = {
             TopAppBar(
                 title = { Text(todayText, fontWeight = FontWeight.Bold) },
                 actions = {

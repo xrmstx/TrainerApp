@@ -1,0 +1,10 @@
+R_DEF: Internal format may change without notice
+local
+drawable app_background
+drawable app_splash
+font pt_sans_bold
+font pt_sans_regular
+font pt_serif_bold
+font pt_serif_regular
+mipmap ic_launcher
+style Theme.TrainerApp

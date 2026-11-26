@@ -39,6 +39,8 @@ fun SettingsScreen(onBackClick: () -> Unit) {
     }
 
     Scaffold(
+    containerColor = Color.Transparent,
+    
         topBar = {
             TopAppBar(
                 title = { Text("Настройки", fontWeight = FontWeight.Bold) },

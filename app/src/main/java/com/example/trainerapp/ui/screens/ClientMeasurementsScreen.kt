@@ -2,6 +2,7 @@ package com.example.trainerapp.ui.screens
 
 import android.app.Application
 import android.content.Intent
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -73,6 +74,8 @@ fun ClientMeasurementsScreen(
     var showDialog by remember { mutableStateOf(false) }
 
     Scaffold(
+    containerColor = Color.Transparent,
+    
         topBar = {
             TopAppBar(
                 title = { Text("Замеры · $clientName") },

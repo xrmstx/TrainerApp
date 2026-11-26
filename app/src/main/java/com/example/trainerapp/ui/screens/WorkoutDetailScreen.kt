@@ -1,6 +1,7 @@
 package com.example.trainerapp.ui.screens
 
 import android.app.Application
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
@@ -554,6 +555,8 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
     }
 
     Scaffold(
+    containerColor = Color.Transparent,
+    
         topBar = {
             TopAppBar(
                 title = { Text(workoutName, fontWeight = FontWeight.Bold) },
