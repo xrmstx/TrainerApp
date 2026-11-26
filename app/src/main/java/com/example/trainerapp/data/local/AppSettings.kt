@@ -10,7 +10,7 @@ object AppSettings {
     private const val PREFS = "trainer_app_settings"
     private const val KEY_THEME = "theme_mode"
 
-    private val _theme = MutableStateFlow(ThemeMode.DARK)
+    private val _theme = MutableStateFlow(ThemeMode.SPORT)
     val theme: StateFlow<ThemeMode> = _theme.asStateFlow()
 
     private fun prefs(context: Context) =
@@ -18,7 +18,7 @@ object AppSettings {
 
     // Вызвать один раз в MainActivity.onCreate, до setContent
     fun init(context: Context) {
-        _theme.value = ThemeMode.fromName(prefs(context).getString(KEY_THEME, ThemeMode.DARK.name))
+        _theme.value = ThemeMode.fromName(prefs(context).getString(KEY_THEME, null))
     }
 
     fun setTheme(context: Context, mode: ThemeMode) {
