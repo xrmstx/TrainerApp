@@ -3,6 +3,7 @@ package com.example.trainerapp.ui.screens
 import android.app.Application
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -307,6 +308,57 @@ private fun protocolBadge(block: ExerciseBlock): String? {
     }
 }
 
+/** Разбивает упражнения блока на подряд идущие группы: связки и одиночные */
+private fun groupBySuperset(list: List<TemplateExercise>): List<Pair<Int?, List<TemplateExercise>>> {
+    val result = mutableListOf<Pair<Int?, List<TemplateExercise>>>()
+    list.sortedBy { it.order }.forEach { ex ->
+        val last = result.lastOrNull()
+        if (ex.supersetGroup != null && last?.first == ex.supersetGroup) {
+            result[result.lastIndex] = last.first to (last.second + ex)
+        } else {
+            result.add(ex.supersetGroup to listOf(ex))
+        }
+    }
+    return result
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun TemplateExerciseCard(
+    ex: TemplateExercise,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            ),
+        shape = RoundedCornerShape(10.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(ex.exerciseName, style = MaterialTheme.typography.bodyLarge)
+                if (!ex.note.isNullOrBlank()) {
+                    Text(ex.note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                }
+            }
+            val plan = if (ex.targetSets == 0) {
+                // Circuit: показываем метрику, если повторения не заданы (метры, ккал, время)
+                if (ex.targetReps.isBlank()) metricLabels.firstOrNull { it.first == ex.metricType }?.second ?: ""
+                else ex.targetReps
+            } else "${ex.targetSets}×${ex.targetReps}"
+            if (plan.isNotBlank()) {
+                Text(plan, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () -> Unit) {
@@ -336,6 +388,7 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
     val exInSuperset by viewModel.exInSuperset.collectAsState()
 
     var blockToDelete by remember { mutableStateOf<ExerciseBlock?>(null) }
+    var exerciseToDelete by remember { mutableStateOf<TemplateExercise?>(null) }
 
     blockError?.let { message ->
         AlertDialog(
@@ -358,6 +411,21 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
                 }) { Text("Удалить", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = { TextButton(onClick = { blockToDelete = null }) { Text("Отмена") } }
+        )
+    }
+
+    if (exerciseToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { exerciseToDelete = null },
+            title = { Text("Удалить упражнение?") },
+            text = { Text("«${exerciseToDelete!!.exerciseName}» будет удалено из тренировки безвозвратно.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteExercise(exerciseToDelete!!)
+                    exerciseToDelete = null
+                }) { Text("Удалить", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { exerciseToDelete = null }) { Text("Отмена") } }
         )
     }
 
@@ -515,7 +583,7 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
                     FilterChip(
                         selected = exInSuperset,
                         onClick = { viewModel.onSupersetChange(!exInSuperset) },
-                        label = { Text("В связку с предыдущим") }
+                        label = { Text("🔗 В связку с предыдущим") }
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
@@ -580,8 +648,7 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
     }
 
     Scaffold(
-    containerColor = Color.Transparent,
-    
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = { Text(workoutName, fontWeight = FontWeight.Bold) },
@@ -625,29 +692,47 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
                                 if (exercises.isEmpty()) {
                                     Text("Пусто", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                                 } else {
-                                    exercises.forEach { ex ->
-                                        Card(
-                                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).combinedClickable(
+                                    // Подряд идущие упражнения с одинаковым supersetGroup — в общую рамку
+                                    groupBySuperset(exercises).forEach { (_, groupExs) ->
+                                        if (groupExs.size == 1) {
+                                            val ex = groupExs.first()
+                                            TemplateExerciseCard(
+                                                ex = ex,
                                                 onClick = { viewModel.openExerciseDialog(block, ex) },
-                                                onLongClick = { viewModel.deleteExercise(ex) }
-                                            ),
-                                            shape = RoundedCornerShape(10.dp),
-                                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                                        ) {
-                                            Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                                Column(modifier = Modifier.weight(1f)) {
-                                                    Text(ex.exerciseName, style = MaterialTheme.typography.bodyLarge)
-                                                    if (!ex.note.isNullOrBlank()) {
-                                                        Text(ex.note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                                                    }
+                                                onLongClick = { exerciseToDelete = ex }
+                                            )
+                                        } else {
+                                            val sets = groupExs.map { it.targetSets }.distinct()
+                                            val roundsLabel = if (sets.size == 1 && sets.first() > 0) " ×${sets.first()}" else ""
+                                            Column(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 6.dp)
+                                                    .border(1.dp, MaterialTheme.colorScheme.secondary, RoundedCornerShape(12.dp))
+                                                    .padding(8.dp)
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(
+                                                        Icons.Default.Link,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(16.dp),
+                                                        tint = MaterialTheme.colorScheme.secondary
+                                                    )
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    Text(
+                                                        "Связка$roundsLabel — выполняется непрерывно",
+                                                        style = MaterialTheme.typography.labelMedium,
+                                                        color = MaterialTheme.colorScheme.secondary,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
                                                 }
-                                                val plan = if (ex.targetSets == 0) {
-                                                    // Circuit: показываем метрику, если повторения не заданы (метры, ккал, время)
-                                                    if (ex.targetReps.isBlank()) metricLabels.firstOrNull { it.first == ex.metricType }?.second ?: ""
-                                                    else ex.targetReps
-                                                } else "${ex.targetSets}×${ex.targetReps}"
-                                                if (plan.isNotBlank()) {
-                                                    Text(plan, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                groupExs.forEach { ex ->
+                                                    TemplateExerciseCard(
+                                                        ex = ex,
+                                                        onClick = { viewModel.openExerciseDialog(block, ex) },
+                                                        onLongClick = { exerciseToDelete = ex }
+                                                    )
                                                 }
                                             }
                                         }

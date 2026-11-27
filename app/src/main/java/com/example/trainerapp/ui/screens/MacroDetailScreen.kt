@@ -202,6 +202,7 @@ class MacroDetailViewModel(application: Application, val macroId: Long) : Androi
                                 val newWeight = if (isStrength && ex.targetWeight != null && step > 0.0) {
                                     if (percent) ex.targetWeight * (1 + step / 100) else ex.targetWeight + step
                                 } else ex.targetWeight
+                                // ex.copy сохраняет supersetGroup — связки переносятся между неделями
                                 dao.insertTemplateExercise(
                                     ex.copy(id = 0, blockId = newBlockId, targetWeight = newWeight)
                                 )
@@ -216,6 +217,7 @@ class MacroDetailViewModel(application: Application, val macroId: Long) : Androi
         }
     }
 
+    /** Шаринг шаблона целиком: связки выводятся группой, как в клиентском шаринге */
     fun shareProgram(macroName: String, onReady: (String) -> Unit) {
         viewModelScope.launch {
             val workouts = dao.getWorkoutsForMacroSync(macroId)
@@ -230,10 +232,49 @@ class MacroDetailViewModel(application: Application, val macroId: Long) : Androi
                         appendLine("📅 $dayLabel: ${workout.name}")
                         dao.getBlocksForWorkoutSync(workout.id).forEach { block ->
                             appendLine("  ${block.blockTitle}:")
-                            dao.getExercisesForBlockSync(block.id).forEach { ex ->
-                                val plan = if (ex.targetSets == 0) ex.targetReps else "${ex.targetSets}×${ex.targetReps}"
-                                val weightText = ex.targetWeight?.let { " · ${formatWeight(it)} кг" } ?: ""
-                                appendLine("    • ${ex.exerciseName} — $plan$weightText")
+                            // Бейдж протокола меткона — только у Circuit-блоков
+                            if (block.blockType == "CIRCUIT" && block.protocol != "NONE") {
+                                val badge = when (block.protocol) {
+                                    "AMRAP" -> "AMRAP ${block.protocolValue} мин"
+                                    "EMOM" -> "EMOM ${block.protocolValue} мин"
+                                    "FOR_TIME" -> "For Time" + (if (block.protocolValue.isNotBlank()) " ${block.protocolValue}" else "")
+                                    "RFT" -> "RFT ${block.protocolValue}"
+                                    "TABATA" -> "Tabata ${block.protocolValue}"
+                                    "CUSTOM" -> if (block.protocolValue.isNotBlank()) block.protocolValue else "Своя схема"
+                                    else -> null
+                                }
+                                if (badge != null) appendLine("    $badge")
+                            }
+                            val exercises = dao.getExercisesForBlockSync(block.id).sortedBy { it.order }
+                            var i = 0
+                            while (i < exercises.size) {
+                                val ex = exercises[i]
+                                if (ex.supersetGroup != null) {
+                                    // Подряд идущие участники одной связки — одним блоком
+                                    val group = exercises.drop(i).takeWhile { it.supersetGroup == ex.supersetGroup }
+                                    val distinctSets = group.map { it.targetSets }.distinct()
+                                    val rounds = if (distinctSets.size == 1 && distinctSets.first() > 0) distinctSets.first().toString() else ""
+                                    appendLine("    🔗 Связка" + (if (rounds.isNotBlank()) " ×$rounds" else "") + ":")
+                                    group.forEachIndexed { gi, gex ->
+                                        val weightText = gex.targetWeight?.let { " · ${formatWeight(it)} кг" } ?: ""
+                                        val plan = if (rounds.isNotBlank()) {
+                                            gex.targetReps + weightText
+                                        } else {
+                                            val p = if (gex.targetSets == 0) gex.targetReps else "${gex.targetSets}×${gex.targetReps}"
+                                            if (p.isBlank()) weightText.trimStart(' ', '·') else "$p$weightText"
+                                        }
+                                        val prefix = if (gi == 0) "• " else "  + "
+                                        appendLine("    $prefix${gex.exerciseName}" + (if (plan.isBlank()) "" else " — $plan"))
+                                        gex.note?.takeIf { it.isNotBlank() }?.let { appendLine("        $it") }
+                                    }
+                                    i += group.size
+                                } else {
+                                    val plan = if (ex.targetSets == 0) ex.targetReps else "${ex.targetSets}×${ex.targetReps}"
+                                    val weightText = ex.targetWeight?.let { " · ${formatWeight(it)} кг" } ?: ""
+                                    appendLine("    • ${ex.exerciseName} — $plan$weightText")
+                                    ex.note?.takeIf { it.isNotBlank() }?.let { appendLine("        $it") }
+                                    i++
+                                }
                             }
                         }
                         appendLine()
@@ -380,8 +421,8 @@ fun MacroDetailScreen(macroId: Long, macroName: String, onBackClick: () -> Unit,
     }
 
     Scaffold(
-    containerColor = Color.Transparent,
-    
+        containerColor = Color.Transparent,
+
         topBar = {
             TopAppBar(
                 title = { Text(macroName, fontWeight = FontWeight.Bold) },
