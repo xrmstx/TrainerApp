@@ -43,6 +43,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+// Событие: в связке groupId введён вес weight. stamp нужен,
+// чтобы повторный ввод того же веса заново триггерил автоподстановку.
+data class WeightBroadcast(
+    val groupId: Long,
+    val weight: Double,
+    val stamp: Long = System.nanoTime()
+)
+
 class ClientWorkoutLogViewModel(application: Application, val workoutId: Long) : AndroidViewModel(application) {
     private val dao = AppDatabase.getDatabase(application).appDao()
     val exercises = dao.getClientExercises(workoutId)
@@ -54,6 +62,10 @@ class ClientWorkoutLogViewModel(application: Application, val workoutId: Long) :
 
     private val _lastWeights = MutableStateFlow<Map<Long, Double?>>(emptyMap())
     val lastWeights: StateFlow<Map<Long, Double?>> = _lastWeights.asStateFlow()
+
+    // Автозаполнение веса внутри связки: последняя введённая величина
+    private val _weightBroadcast = MutableStateFlow<WeightBroadcast?>(null)
+    val weightBroadcast: StateFlow<WeightBroadcast?> = _weightBroadcast.asStateFlow()
 
     private val _isDone = MutableStateFlow(false)
     val isDone: StateFlow<Boolean> = _isDone.asStateFlow()
@@ -92,6 +104,12 @@ class ClientWorkoutLogViewModel(application: Application, val workoutId: Long) :
         }
     }
 
+    fun broadcastWeight(groupId: Long?, weight: Double) {
+        if (groupId != null && weight > 0) {
+            _weightBroadcast.value = WeightBroadcast(groupId, weight)
+        }
+    }
+
     fun saveLog(
         exerciseId: Long,
         setNum: String,
@@ -99,7 +117,8 @@ class ClientWorkoutLogViewModel(application: Application, val workoutId: Long) :
         weight: String,
         note: String,
         isCircuit: Boolean,
-        circuitResult: String? = null
+        circuitResult: String? = null,
+        supersetGroupId: Long? = null
     ) {
         val s = setNum.toIntOrNull() ?: 1
         val r = reps.toIntOrNull() ?: 0
@@ -118,6 +137,7 @@ class ClientWorkoutLogViewModel(application: Application, val workoutId: Long) :
                 )
                 if (!isCircuit) {
                     _lastWeights.value = _lastWeights.value + (exerciseId to w)
+                    if (w > 0) broadcastWeight(supersetGroupId, w)
                 }
             }
         }
@@ -170,6 +190,7 @@ private fun ExerciseLogCard(
     inSuperset: Boolean,
     viewModel: ClientWorkoutLogViewModel,
     lastWeights: Map<Long, Double?>,
+    weightBroadcast: WeightBroadcast?,
     onSaved: (String) -> Unit
 ) {
     val isCircuit = ex.blockType == "CIRCUIT"
@@ -192,6 +213,14 @@ private fun ExerciseLogCard(
     LaunchedEffect(lastWeights) {
         if (!isCircuit && weight.isEmpty()) {
             lastWeights[ex.id]?.let { weight = formatWeight(it) }
+        }
+    }
+
+    // Автоподстановка веса из соседей по связке — только в пустое поле
+    LaunchedEffect(weightBroadcast) {
+        val b = weightBroadcast ?: return@LaunchedEffect
+        if (b.groupId == ex.supersetGroup && b.weight > 0 && weight.trim().isEmpty()) {
+            weight = formatWeight(b.weight)
         }
     }
 
@@ -323,7 +352,10 @@ private fun ExerciseLogCard(
                     )
                     OutlinedTextField(
                         value = weight,
-                        onValueChange = { weight = it },
+                        onValueChange = {
+                            weight = it
+                            viewModel.broadcastWeight(ex.supersetGroup, it.trim().replace(',', '.').toDoubleOrNull() ?: 0.0)
+                        },
                         label = { Text("Вес") },
                         modifier = Modifier.weight(1.2f),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -436,7 +468,7 @@ private fun ExerciseLogCard(
                             return@Button
                         }
                         val s = setNum.toIntOrNull() ?: 1
-                        viewModel.saveLog(ex.id, setNum, reps, weight, note, false)
+                        viewModel.saveLog(ex.id, setNum, reps, weight, note, false, supersetGroupId = ex.supersetGroup)
                         val over = if (targetSets > 0 && s > targetSets) " (сверх плана)" else ""
                         onSaved("Записано: подход $s, ${weight.trim().ifEmpty { "0" }} кг$over")
                         setNum = (s + 1).toString()
@@ -465,6 +497,7 @@ fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: ()
     val exercises by viewModel.exercises.collectAsState(initial = emptyList())
     val historyDialog by viewModel.historyDialog.collectAsState()
     val lastWeights by viewModel.lastWeights.collectAsState()
+    val weightBroadcast by viewModel.weightBroadcast.collectAsState()
     val isDone by viewModel.isDone.collectAsState()
 
     val keyboard = LocalSoftwareKeyboardController.current
@@ -562,6 +595,7 @@ fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: ()
                                         inSuperset = false,
                                         viewModel = viewModel,
                                         lastWeights = lastWeights,
+                                        weightBroadcast = weightBroadcast,
                                         onSaved = { showSavedSnackbar(it) }
                                     )
                                 }
@@ -598,6 +632,7 @@ fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: ()
                                                 inSuperset = true,
                                                 viewModel = viewModel,
                                                 lastWeights = lastWeights,
+                                                weightBroadcast = weightBroadcast,
                                                 onSaved = { showSavedSnackbar(it) }
                                             )
                                         }
