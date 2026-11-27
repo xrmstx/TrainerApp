@@ -252,7 +252,14 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
                     val all = dao.getExercisesForBlockSync(blockId).sortedBy { it.order }
                     val others = if (existing != null) all.filter { it.id != existing.id } else all
                     val prev = others.lastOrNull()
-                    supersetGroup = prev?.supersetGroup ?: ((others.mapNotNull { it.supersetGroup }.maxOrNull() ?: 0) + 1)
+                    val newGroup = prev?.supersetGroup
+                        ?: ((others.mapNotNull { it.supersetGroup }.maxOrNull() ?: 0) + 1)
+                    supersetGroup = newGroup
+                    // Ключевой момент: предыдущее упражнение тоже присоединяем к группе.
+                    // Иначе группа состоит из одного участника и рамка нигде не рисуется
+                    if (prev != null && prev.supersetGroup == null) {
+                        dao.updateTemplateExercise(prev.copy(supersetGroup = newGroup))
+                    }
                 }
                 if (existing != null) {
                     dao.updateTemplateExercise(
