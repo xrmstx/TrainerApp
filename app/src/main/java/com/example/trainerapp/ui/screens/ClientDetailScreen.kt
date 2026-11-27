@@ -133,7 +133,8 @@ class ClientDetailViewModel(
                                     metricType = exercise.metricType,
                                     protocol = block.protocol,
                                     protocolValue = block.protocolValue,
-                                    supersetGroup = exercise.supersetGroup
+                                    supersetGroup = exercise.supersetGroup,
+                                    exerciseKey = exercise.exerciseKey
                                 )
                             )
                         }
