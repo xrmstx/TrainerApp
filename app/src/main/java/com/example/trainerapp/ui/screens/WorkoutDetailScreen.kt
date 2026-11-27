@@ -33,8 +33,11 @@ import com.example.trainerapp.data.library.ExerciseLibraryRegistry
 import com.example.trainerapp.data.library.LibraryEntry
 import com.example.trainerapp.ui.components.EmptyState
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class WorkoutDetailViewModel(application: Application, val workoutId: Long) : AndroidViewModel(application) {
@@ -66,6 +69,12 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
     val currentBlockIsCircuit: StateFlow<Boolean> = _currentBlockIsCircuit.asStateFlow()
     private val _editExercise = MutableStateFlow<TemplateExercise?>(null)
     val editExercise: StateFlow<TemplateExercise?> = _editExercise.asStateFlow()
+
+    // Якорь: упражнение, после которого вставляем нового участника связки
+    private val _anchorExerciseId = MutableStateFlow<Long?>(null)
+    val isSupersetAnchored: StateFlow<Boolean> = _anchorExerciseId
+        .map { it != null }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val _exName = MutableStateFlow("")
     private val _exSets = MutableStateFlow("")
@@ -156,6 +165,7 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
         _currentBlockId.value = block.id
         _currentBlockIsCircuit.value = block.blockType == "CIRCUIT"
         _editExercise.value = ex
+        _anchorExerciseId.value = null
         _showExerciseDialog.value = true
         if (ex != null) {
             _exName.value = ex.exerciseName
@@ -175,9 +185,25 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
         }
     }
 
+    /** Добавление участника связки: якорь — упражнение, под которым встанет новое */
+    fun openSupersetDialog(block: ExerciseBlock, anchor: TemplateExercise) {
+        _currentBlockId.value = block.id
+        _currentBlockIsCircuit.value = block.blockType == "CIRCUIT"
+        _editExercise.value = null
+        _anchorExerciseId.value = anchor.id
+        _showExerciseDialog.value = true
+        _exName.value = ""; _exReps.value = ""; _exWeight.value = ""; _exNote.value = ""
+        _exMetric.value = anchor.metricType
+        // Круги в связке общие — наследуем от якоря
+        _exSets.value = if (anchor.targetSets > 0) anchor.targetSets.toString() else ""
+        _exType.value = if (block.blockType == "CIRCUIT") "CIRCUIT" else "LINEAR"
+        _exInSuperset.value = true
+    }
+
     fun closeExerciseDialog() {
         _showExerciseDialog.value = false
         _editExercise.value = null
+        _anchorExerciseId.value = null
         _currentBlockId.value = null
         _currentBlockIsCircuit.value = false
     }
@@ -244,21 +270,40 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
         if (!isCircuit && (reps.isEmpty() || sets <= 0)) return
 
         val inSuperset = _exInSuperset.value && !isCircuit
+        val anchorId = _anchorExerciseId.value
         var supersetGroup: Int? = null
+        var insertOrder: Int? = null
 
         viewModelScope.launch {
             try {
                 if (inSuperset) {
                     val all = dao.getExercisesForBlockSync(blockId).sortedBy { it.order }
-                    val others = if (existing != null) all.filter { it.id != existing.id } else all
-                    val prev = others.lastOrNull()
-                    val newGroup = prev?.supersetGroup
-                        ?: ((others.mapNotNull { it.supersetGroup }.maxOrNull() ?: 0) + 1)
-                    supersetGroup = newGroup
-                    // Ключевой момент: предыдущее упражнение тоже присоединяем к группе.
-                    // Иначе группа состоит из одного участника и рамка нигде не рисуется
-                    if (prev != null && prev.supersetGroup == null) {
-                        dao.updateTemplateExercise(prev.copy(supersetGroup = newGroup))
+                    if (anchorId != null && existing == null) {
+                        // Путь «+»: встанем сразу после якоря и присоединимся к его группе
+                        val anchor = all.firstOrNull { it.id == anchorId }
+                        if (anchor != null) {
+                            val newGroup = anchor.supersetGroup
+                                ?: ((all.mapNotNull { it.supersetGroup }.maxOrNull() ?: 0) + 1)
+                            supersetGroup = newGroup
+                            if (anchor.supersetGroup == null) {
+                                dao.updateTemplateExercise(anchor.copy(supersetGroup = newGroup))
+                            }
+                            // Сдвигаем порядок упражнений ниже якоря — новое встаёт под ним
+                            all.filter { it.order > anchor.order }
+                                .forEach { dao.updateTemplateExercise(it.copy(order = it.order + 1)) }
+                            insertOrder = anchor.order + 1
+                        }
+                    } else {
+                        // Путь чипа: цепляемся к последнему упражнению блока
+                        val others = if (existing != null) all.filter { it.id != existing.id } else all
+                        val prev = others.lastOrNull()
+                        val newGroup = prev?.supersetGroup
+                            ?: ((others.mapNotNull { it.supersetGroup }.maxOrNull() ?: 0) + 1)
+                        supersetGroup = newGroup
+                        // Предыдущее тоже присоединяем к группе, иначе рамка не соберётся
+                        if (prev != null && prev.supersetGroup == null) {
+                            dao.updateTemplateExercise(prev.copy(supersetGroup = newGroup))
+                        }
                     }
                 }
                 if (existing != null) {
@@ -270,13 +315,13 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
                             targetWeight = weight,
                             note = note.ifEmpty { null },
                             metricType = metric,
-                            supersetGroup = supersetGroup
+                            supersetGroup = supersetGroup ?: existing.supersetGroup.takeIf { !inSuperset }
                         )
                     )
                     // Чип могли выключить у середины группы — приводим связки в порядок
                     normalizeSupersets(blockId)
                 } else {
-                    val order = (dao.getMaxExerciseOrder(blockId) ?: 0) + 1
+                    val order = insertOrder ?: ((dao.getMaxExerciseOrder(blockId) ?: 0) + 1)
                     dao.insertTemplateExercise(
                         TemplateExercise(
                             blockId = blockId,
@@ -371,8 +416,10 @@ private fun groupBySuperset(list: List<TemplateExercise>): List<Pair<Int?, List<
 @Composable
 private fun TemplateExerciseCard(
     ex: TemplateExercise,
+    canAddToSuperset: Boolean,
     onClick: () -> Unit,
-    onLongClick: () -> Unit
+    onLongClick: () -> Unit,
+    onAddSuperset: () -> Unit
 ) {
     Card(
         modifier = Modifier
@@ -385,7 +432,7 @@ private fun TemplateExerciseCard(
         shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
-        Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(modifier = Modifier.padding(start = 10.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(ex.exerciseName, style = MaterialTheme.typography.bodyLarge)
                 if (!ex.note.isNullOrBlank()) {
@@ -401,6 +448,18 @@ private fun TemplateExerciseCard(
             val plan = ex.targetWeight?.let { "$base · ${formatWeight(it)} кг" } ?: base
             if (plan.isNotBlank()) {
                 Text(plan, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+            }
+            if (canAddToSuperset) {
+                IconButton(onClick = onAddSuperset, modifier = Modifier.size(34.dp)) {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = "Добавить упражнение в связку",
+                        tint = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            } else {
+                Spacer(modifier = Modifier.width(6.dp))
             }
         }
     }
@@ -434,6 +493,7 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
     val searchQuery by viewModel.searchQuery.collectAsState()
     val blockError by viewModel.blockError.collectAsState()
     val exInSuperset by viewModel.exInSuperset.collectAsState()
+    val supersetAnchored by viewModel.isSupersetAnchored.collectAsState()
 
     var blockToDelete by remember { mutableStateOf<ExerciseBlock?>(null) }
     var exerciseToDelete by remember { mutableStateOf<TemplateExercise?>(null) }
@@ -548,7 +608,15 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
 
         AlertDialog(
             onDismissRequest = { viewModel.closeExerciseDialog() },
-            title = { Text(if (isEditing != null) "Редактировать упражнение" else "Новое упражнение") },
+            title = {
+                Text(
+                    when {
+                        supersetAnchored -> "Новое упражнение в связку"
+                        isEditing != null -> "Редактировать упражнение"
+                        else -> "Новое упражнение"
+                    }
+                )
+            },
             text = {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                     OutlinedTextField(
@@ -586,7 +654,7 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
                             OutlinedTextField(
                                 value = exSets,
                                 onValueChange = { viewModel.onSetsChange(it) },
-                                label = { Text("Подходов") },
+                                label = { Text(if (exInSuperset) "Кругов (общие)" else "Подходов") },
                                 modifier = Modifier.weight(1f),
                                 shape = RoundedCornerShape(12.dp),
                                 singleLine = true
@@ -637,8 +705,10 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
+                    // В режиме «+» связка предопределена — чип заблокирован во включённом состоянии
                     FilterChip(
                         selected = exInSuperset,
+                        enabled = !supersetAnchored,
                         onClick = { viewModel.onSupersetChange(!exInSuperset) },
                         label = { Text("🔗 В связку с предыдущим") }
                     )
@@ -728,6 +798,7 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
             } else {
                 LazyColumn {
                     items(blocks, key = { it.id }) { block ->
+                        val canSuperset = block.blockType != "CIRCUIT"
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                             shape = RoundedCornerShape(16.dp),
@@ -755,8 +826,10 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
                                             val ex = groupExs.first()
                                             TemplateExerciseCard(
                                                 ex = ex,
+                                                canAddToSuperset = canSuperset,
                                                 onClick = { viewModel.openExerciseDialog(block, ex) },
-                                                onLongClick = { exerciseToDelete = ex }
+                                                onLongClick = { exerciseToDelete = ex },
+                                                onAddSuperset = { viewModel.openSupersetDialog(block, ex) }
                                             )
                                         } else {
                                             val sets = groupExs.map { it.targetSets }.distinct()
@@ -777,7 +850,7 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
                                                     )
                                                     Spacer(modifier = Modifier.width(4.dp))
                                                     Text(
-                                                        "Связка$roundsLabel — выполняется непрерывно",
+                                                        "Связка$roundsLabel — круги общие",
                                                         style = MaterialTheme.typography.labelMedium,
                                                         color = MaterialTheme.colorScheme.secondary,
                                                         fontWeight = FontWeight.Bold
@@ -787,8 +860,10 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
                                                 groupExs.forEach { ex ->
                                                     TemplateExerciseCard(
                                                         ex = ex,
+                                                        canAddToSuperset = canSuperset,
                                                         onClick = { viewModel.openExerciseDialog(block, ex) },
-                                                        onLongClick = { exerciseToDelete = ex }
+                                                        onLongClick = { exerciseToDelete = ex },
+                                                        onAddSuperset = { viewModel.openSupersetDialog(block, ex) }
                                                     )
                                                 }
                                             }

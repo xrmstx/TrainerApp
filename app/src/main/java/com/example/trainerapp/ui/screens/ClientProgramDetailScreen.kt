@@ -22,8 +22,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EventNote
 import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.SelfImprovement
@@ -34,9 +36,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -67,20 +72,77 @@ class ClientProgramDetailViewModel(application: Application, private val program
     private val _currentWeek = MutableStateFlow<Int?>(null)
     val currentWeek: StateFlow<Int?> = _currentWeek.asStateFlow()
 
+    // Предложение перехода: номер недели, на которую можно перейти; null — баннер скрыт
+    private val _weekSuggestion = MutableStateFlow<Int?>(null)
+    val weekSuggestion: StateFlow<Int?> = _weekSuggestion.asStateFlow()
+
+    // Неделя, для которой предложение уже отклонили («Позже») — больше не дёргаем
+    private var dismissedSuggestionForWeek: Int? = null
+
     init {
         viewModelScope.launch {
             _program.value = dao.getClientProgramSync(programId)
+            // Без текущей недели проверка не сработает — выставляем из программы или первой недели
+            if (_currentWeek.value == null) {
+                val p = _program.value
+                _currentWeek.value = p?.weekNumber?.takeIf { it > 0 }
+                    ?: dao.getClientWorkoutsForProgramSync(programId).minOfOrNull { it.weekNumber }
+                    ?: 1
+            }
+            checkSuggestion()
         }
     }
 
-    fun onWeekChange(week: Int) { _currentWeek.value = week }
+    fun onWeekChange(week: Int) {
+        _currentWeek.value = week
+        checkSuggestion()
+    }
 
     // Прямая установка статуса: нужна для Undo — вернуть ровно прежнее значение,
     // а не полагаться на текущее состояние flow в момент тапа по «Отменить»
     fun setWorkoutStatus(workoutId: Long, status: String) {
         viewModelScope.launch {
             dao.setClientWorkoutStatus(workoutId, status)
+            // После смены статуса неделя могла закрыться целиком — проверяем предложение
+            checkSuggestion()
         }
+    }
+
+    /**
+     * Проверка: все ли тренировки активной недели выполнены и есть ли куда переходить.
+     * Считаем по базе, а не по UI-состоянию — так не бывает рассинхрона.
+     */
+    fun checkSuggestion() {
+        viewModelScope.launch {
+            val week = _currentWeek.value
+            val p = _program.value
+            if (week == null || p == null) return@launch
+            val next = week + 1
+            if (p.totalWeeks <= 0 || next > p.totalWeeks) {
+                _weekSuggestion.value = null
+                return@launch
+            }
+            // Для недели, предложение по которой уже отклонили, не спрашиваем повторно
+            if (dismissedSuggestionForWeek == week) return@launch
+            val count = dao.countWorkoutsInClientWeek(p.id, week)
+            if (count == 0) {
+                _weekSuggestion.value = null
+                return@launch
+            }
+            val done = dao.countDoneWorkoutsInClientWeek(p.id, week)
+            _weekSuggestion.value = if (count == done) next else null
+        }
+    }
+
+    fun dismissSuggestion() {
+        dismissedSuggestionForWeek = _currentWeek.value
+        _weekSuggestion.value = null
+    }
+
+    fun goToWeek(week: Int) {
+        _currentWeek.value = week
+        dismissedSuggestionForWeek = null
+        checkSuggestion()
     }
 
     /**
@@ -252,6 +314,18 @@ fun ClientProgramDetailScreen(
     val program by viewModel.program.collectAsState()
     val workouts by viewModel.workouts.collectAsState(initial = emptyList())
     val selectedWeek by viewModel.currentWeek.collectAsState()
+    val weekSuggestion by viewModel.weekSuggestion.collectAsState()
+
+    // Статус тренировки могут менять и в другом экране (клиентский лог) —
+    // при возврате сюда пересчитываем предложение перехода
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.checkSuggestion()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     val totalWeeks = program?.totalWeeks ?: 0
     // Пока программа не загрузилась, неделя не выбрана; после загрузки — текущая неделя программы
@@ -379,6 +453,42 @@ fun ClientProgramDetailScreen(
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            // Баннер: неделя закрыта целиком — предложение перейти дальше
+            weekSuggestion?.let { next ->
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                ) {
+                    Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.ArrowForward,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.secondary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Неделя закрыта целиком",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                "Перейти на неделю $next?",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            )
+                        }
+                        TextButton(onClick = { viewModel.dismissSuggestion() }) { Text("Позже") }
+                        Button(
+                            onClick = { viewModel.goToWeek(next) },
+                            shape = RoundedCornerShape(10.dp)
+                        ) { Text("Вперёд") }
+                    }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
             }
 
             // Прогресс недели
