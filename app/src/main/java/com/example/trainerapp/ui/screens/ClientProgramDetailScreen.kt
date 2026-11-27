@@ -45,8 +45,6 @@ import com.example.trainerapp.data.local.AppDatabase
 import com.example.trainerapp.data.model.ClientProgram
 import com.example.trainerapp.data.model.ClientWorkout
 import com.example.trainerapp.ui.components.EmptyState
-import com.example.trainerapp.ui.theme.StatusDone
-import com.example.trainerapp.ui.theme.StatusPlanned
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -121,18 +119,46 @@ class ClientProgramDetailViewModel(application: Application, private val program
                             }
                             if (badge != null) appendLine("    $badge")
                         }
-                        blockExercises.sortedBy { it.order }.forEach { ex ->
-                            val plan = if (ex.targetSets == 0) {
-                                if (ex.targetReps.isBlank()) "" else ex.targetReps
-                            } else "${ex.targetSets}×${ex.targetReps}"
-                            val weightText = ex.targetWeight?.let { w ->
-                                val formatted = if (w == w.toLong().toDouble()) w.toLong().toString() else w.toString()
-                                " · $formatted кг"
-                            } ?: ""
-                            val planText = if (plan.isBlank()) weightText.trimStart(' ', '·')
-                            else "$plan$weightText"
-                            appendLine("• ${ex.exerciseName}" + (if (planText.isBlank()) "" else " — $planText"))
-                            ex.note?.takeIf { it.isNotBlank() }?.let { appendLine("  $it") }
+                        val sorted = blockExercises.sortedBy { it.order }
+                        var i = 0
+                        while (i < sorted.size) {
+                            val ex = sorted[i]
+                            if (ex.supersetGroup != null) {
+                                val group = sorted.drop(i).takeWhile { it.supersetGroup == ex.supersetGroup }
+                                val distinctSets = group.map { it.targetSets }.distinct()
+                                val rounds = if (distinctSets.size == 1 && distinctSets.first() > 0) distinctSets.first().toString() else ""
+                                appendLine("🔗 Связка" + (if (rounds.isNotBlank()) " ×$rounds" else "") + ":")
+                                group.forEachIndexed { gi, gex ->
+                                    val weightText = gex.targetWeight?.let { w ->
+                                        val formatted = if (w == w.toLong().toDouble()) w.toLong().toString() else w.toString()
+                                        " · $formatted кг"
+                                    } ?: ""
+                                    val planText = if (rounds.isNotBlank()) gex.targetReps + weightText
+                                    else {
+                                        val plan = if (gex.targetSets == 0) {
+                                            if (gex.targetReps.isBlank()) "" else gex.targetReps
+                                        } else "${gex.targetSets}×${gex.targetReps}"
+                                        if (plan.isBlank()) weightText.trimStart(' ', '·') else "$plan$weightText"
+                                    }
+                                    val prefix = if (gi == 0) "• " else "  + "
+                                    appendLine("$prefix${gex.exerciseName}" + (if (planText.isBlank()) "" else " — $planText"))
+                                    gex.note?.takeIf { it.isNotBlank() }?.let { appendLine("    $it") }
+                                }
+                                i += group.size
+                            } else {
+                                val plan = if (ex.targetSets == 0) {
+                                    if (ex.targetReps.isBlank()) "" else ex.targetReps
+                                } else "${ex.targetSets}×${ex.targetReps}"
+                                val weightText = ex.targetWeight?.let { w ->
+                                    val formatted = if (w == w.toLong().toDouble()) w.toLong().toString() else w.toString()
+                                    " · $formatted кг"
+                                } ?: ""
+                                val planText = if (plan.isBlank()) weightText.trimStart(' ', '·')
+                                else "$plan$weightText"
+                                appendLine("• ${ex.exerciseName}" + (if (planText.isBlank()) "" else " — $planText"))
+                                ex.note?.takeIf { it.isNotBlank() }?.let { appendLine("  $it") }
+                                i++
+                            }
                         }
                         appendLine()
                     }
@@ -254,8 +280,7 @@ fun ClientProgramDetailScreen(
     )
 
     Scaffold(
-    containerColor = Color.Transparent,
-    
+        containerColor = Color.Transparent,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(

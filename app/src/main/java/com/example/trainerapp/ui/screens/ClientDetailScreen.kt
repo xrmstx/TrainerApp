@@ -132,7 +132,8 @@ class ClientDetailViewModel(
                                     note = exercise.note,
                                     metricType = exercise.metricType,
                                     protocol = block.protocol,
-                                    protocolValue = block.protocolValue
+                                    protocolValue = block.protocolValue,
+                                    supersetGroup = exercise.supersetGroup
                                 )
                             )
                         }
@@ -297,8 +298,7 @@ fun ClientDetailScreen(
     }
 
     Scaffold(
-    containerColor = Color.Transparent,
-    
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = {
