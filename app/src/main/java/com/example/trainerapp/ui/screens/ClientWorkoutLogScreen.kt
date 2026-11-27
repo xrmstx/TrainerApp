@@ -2,6 +2,7 @@ package com.example.trainerapp.ui.screens
 
 import android.app.Application
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,6 +16,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.EventNote
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -148,6 +150,310 @@ private fun protocolLabel(ex: ClientExercise): String? {
     }
 }
 
+/** Разбивает упражнения блока на подряд идущие группы: связки и одиночные */
+private fun groupBySuperset(list: List<ClientExercise>): List<Pair<Int?, List<ClientExercise>>> {
+    val result = mutableListOf<Pair<Int?, List<ClientExercise>>>()
+    list.sortedBy { it.order }.forEach { ex ->
+        val last = result.lastOrNull()
+        if (ex.supersetGroup != null && last?.first == ex.supersetGroup) {
+            result[result.lastIndex] = last.first to (last.second + ex)
+        } else {
+            result.add(ex.supersetGroup to listOf(ex))
+        }
+    }
+    return result
+}
+
+@Composable
+private fun ExerciseLogCard(
+    ex: ClientExercise,
+    inSuperset: Boolean,
+    viewModel: ClientWorkoutLogViewModel,
+    lastWeights: Map<Long, Double?>
+) {
+    val isCircuit = ex.blockType == "CIRCUIT"
+    val protocol = ex.protocol
+
+    var setNum by remember(ex.id) { mutableStateOf("1") }
+    var reps by remember(ex.id) { mutableStateOf(ex.targetReps) }
+    var weight by remember(ex.id) { mutableStateOf("") }
+    var note by remember(ex.id) { mutableStateOf("") }
+    var showError by remember(ex.id) { mutableStateOf(false) }
+
+    // Поля результата для меткона — зависят от протокола
+    var rounds by remember(ex.id) { mutableStateOf("") }
+    var extraReps by remember(ex.id) { mutableStateOf("") }
+    var timeText by remember(ex.id) { mutableStateOf("") }
+    var freeResult by remember(ex.id) { mutableStateOf("") }
+    var circuitError by remember(ex.id) { mutableStateOf(false) }
+
+    // Первичная подстановка последнего веса из базы (до первой записи в этой сессии)
+    LaunchedEffect(lastWeights) {
+        if (!isCircuit && weight.isEmpty()) {
+            lastWeights[ex.id]?.let { weight = formatWeight(it) }
+        }
+    }
+
+    val targetSets = ex.targetSets.coerceAtLeast(0)
+    val doneSets = (setNum.toIntOrNull() ?: 1) - 1
+    val overBy = (doneSets - targetSets).coerceAtLeast(0)
+    val progress = when {
+        targetSets <= 0 -> 0f
+        doneSets >= targetSets -> 1f
+        else -> doneSets.toFloat() / targetSets
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(2.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (inSuperset) MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f)
+            else MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(ex.exerciseName, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                TextButton(onClick = { viewModel.showHistory(ex.exerciseName, ex.id) }) { Text("История") }
+            }
+            // У участника связки подходы уже указаны в заголовке связки — тут только повторы и вес
+            val planText = if (isCircuit) {
+                protocolLabel(ex) ?: "Меткон"
+            } else if (inSuperset) {
+                ex.targetReps + (ex.targetWeight?.let { " · ${formatWeight(it)} кг" } ?: "")
+            } else {
+                "${ex.targetSets} × ${ex.targetReps}" + (ex.targetWeight?.let { " · ${formatWeight(it)} кг" } ?: "")
+            }
+            Text(
+                "План: $planText",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            if (isCircuit) {
+                when (protocol) {
+                    "AMRAP" -> {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = rounds,
+                                onValueChange = {
+                                    rounds = it
+                                    circuitError = false
+                                },
+                                label = { Text("Раундов") },
+                                modifier = Modifier.weight(1f),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                shape = RoundedCornerShape(12.dp),
+                                textStyle = LocalTextStyle.current.copy(fontSize = 20.sp),
+                                isError = circuitError,
+                                supportingText = { if (circuitError) Text("Укажите раунды") }
+                            )
+                            OutlinedTextField(
+                                value = extraReps,
+                                onValueChange = { extraReps = it },
+                                label = { Text("Доп. повт.") },
+                                modifier = Modifier.weight(1f),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                shape = RoundedCornerShape(12.dp),
+                                textStyle = LocalTextStyle.current.copy(fontSize = 20.sp)
+                            )
+                        }
+                    }
+                    "EMOM" -> {
+                        OutlinedTextField(
+                            value = rounds,
+                            onValueChange = {
+                                rounds = it
+                                circuitError = false
+                            },
+                            label = { Text("Выполнено раундов из ${ex.protocolValue.ifBlank { "?" }}") },
+                            modifier = Modifier.fillMaxWidth(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            shape = RoundedCornerShape(12.dp),
+                            singleLine = true,
+                            textStyle = LocalTextStyle.current.copy(fontSize = 20.sp),
+                            isError = circuitError,
+                            supportingText = { if (circuitError) Text("Укажите раунды") }
+                        )
+                    }
+                    "FOR_TIME", "RFT" -> {
+                        OutlinedTextField(
+                            value = timeText,
+                            onValueChange = {
+                                timeText = it
+                                circuitError = false
+                            },
+                            label = { Text("Время (мин:сек)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            singleLine = true,
+                            textStyle = LocalTextStyle.current.copy(fontSize = 20.sp),
+                            isError = circuitError,
+                            supportingText = { if (circuitError) Text("Укажите время, например 12:34") }
+                        )
+                    }
+                    else -> {
+                        OutlinedTextField(
+                            value = freeResult,
+                            onValueChange = {
+                                freeResult = it
+                                circuitError = false
+                            },
+                            label = { Text("Результат") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            isError = circuitError,
+                            supportingText = { if (circuitError) Text("Заполните результат") }
+                        )
+                    }
+                }
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = setNum,
+                        onValueChange = { setNum = it },
+                        label = { Text("Подх.") },
+                        modifier = Modifier.weight(0.5f),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        shape = RoundedCornerShape(12.dp),
+                        textStyle = LocalTextStyle.current.copy(fontSize = 20.sp)
+                    )
+                    OutlinedTextField(
+                        value = weight,
+                        onValueChange = { weight = it },
+                        label = { Text("Вес") },
+                        modifier = Modifier.weight(1.2f),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        shape = RoundedCornerShape(12.dp),
+                        textStyle = LocalTextStyle.current.copy(fontSize = 20.sp)
+                    )
+                    OutlinedTextField(
+                        value = reps,
+                        onValueChange = {
+                            reps = it
+                            showError = false
+                        },
+                        label = { Text("Повт.") },
+                        modifier = Modifier.weight(0.8f),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        shape = RoundedCornerShape(12.dp),
+                        textStyle = LocalTextStyle.current.copy(fontSize = 20.sp),
+                        isError = showError,
+                        supportingText = { if (showError) Text("Укажите повторы") }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Шаговые кнопки веса: крупное касание вместо клавиатуры
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            val w = weight.trim().replace(',', '.').toDoubleOrNull() ?: ex.targetWeight ?: 0.0
+                            weight = formatWeight((w - 2.5).coerceAtLeast(0.0))
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.height(44.dp)
+                    ) {
+                        Text("− 2.5", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (weight.isBlank()) "—" else weight.trim(),
+                        style = MaterialTheme.typography.titleLarge,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.weight(1f)
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            val w = weight.trim().replace(',', '.').toDoubleOrNull() ?: ex.targetWeight ?: 0.0
+                            weight = formatWeight((w + 2.5).coerceAtMost(500.0))
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.height(44.dp)
+                    ) {
+                        Text("+ 2.5", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+
+            if (!isCircuit && targetSets > 0 && doneSets > 0) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    LinearProgressIndicator(
+                        progress = progress,
+                        modifier = Modifier.weight(1f),
+                        color = if (overBy > 0) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        if (overBy > 0) "$doneSets из $targetSets · +$overBy сверх" else "$doneSets из $targetSets",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (overBy > 0) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(
+                value = note,
+                onValueChange = { note = it },
+                label = { Text("Комментарий") },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Button(
+                onClick = {
+                    if (isCircuit) {
+                        // Собираем результат по протоколу
+                        val result: String? = when (protocol) {
+                            "AMRAP" -> {
+                                val r = rounds.toIntOrNull()
+                                if (r != null && r > 0) "${r}+" + (extraReps.toIntOrNull() ?: 0).toString() else null
+                            }
+                            "EMOM" -> rounds.toIntOrNull()?.let { "$it/" + ex.protocolValue.ifBlank { "?" } }
+                            "FOR_TIME", "RFT" -> timeText.trim().ifBlank { null }
+                            else -> freeResult.trim().ifBlank { null }
+                        }
+                        if (result == null) {
+                            circuitError = true
+                            return@Button
+                        }
+                        viewModel.saveLog(ex.id, "1", "0", "0", note, true, result)
+                        showSavedSnackbar("Записано: $result")
+                        rounds = ""; extraReps = ""; timeText = ""; freeResult = ""
+                    } else {
+                        val r = reps.toIntOrNull() ?: 0
+                        if (r <= 0) {
+                            showError = true
+                            return@Button
+                        }
+                        val s = setNum.toIntOrNull() ?: 1
+                        viewModel.saveLog(ex.id, setNum, reps, weight, note, false)
+                        val over = if (targetSets > 0 && s > targetSets) " (сверх плана)" else ""
+                        showSavedSnackbar("Записано: подход $s, ${weight.trim().ifEmpty { "0" }} кг$over")
+                        setNum = (s + 1).toString()
+                        // Вес НЕ сбрасываем: он остаётся в поле
+                        // и автоматически становится весом следующего подхода.
+                        // LaunchedEffect выше нужен только для первой подстановки из базы.
+                    }
+                    note = ""
+                },
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Text("Записать", fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: () -> Unit) {
@@ -205,8 +511,7 @@ fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: ()
     }
 
     Scaffold(
-    containerColor = Color.Transparent,
-    
+        containerColor = Color.Transparent,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
@@ -247,278 +552,52 @@ fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: ()
                         item(key = "header_$blockTitle") {
                             Text(blockTitle, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(vertical = 8.dp))
                         }
-                        items(list, key = { it.id }) { ex ->
-                            val isCircuit = ex.blockType == "CIRCUIT"
-                            val protocol = ex.protocol
-
-                            var setNum by remember(ex.id) { mutableStateOf("1") }
-                            var reps by remember(ex.id) { mutableStateOf(ex.targetReps) }
-                            var weight by remember(ex.id) { mutableStateOf("") }
-                            var note by remember(ex.id) { mutableStateOf("") }
-                            var showError by remember(ex.id) { mutableStateOf(false) }
-
-                            // Поля результата для меткона — зависят от протокола
-                            var rounds by remember(ex.id) { mutableStateOf("") }
-                            var extraReps by remember(ex.id) { mutableStateOf("") }
-                            var timeText by remember(ex.id) { mutableStateOf("") }
-                            var freeResult by remember(ex.id) { mutableStateOf("") }
-                            var circuitError by remember(ex.id) { mutableStateOf(false) }
-
-                            // Первичная подстановка последнего веса из базы (до первой записи в этой сессии)
-                            LaunchedEffect(lastWeights) {
-                                if (!isCircuit && weight.isEmpty()) {
-                                    lastWeights[ex.id]?.let { weight = formatWeight(it) }
+                        groupBySuperset(list).forEach { (supersetId, groupExs) ->
+                            if (groupExs.size == 1) {
+                                val ex = groupExs.first()
+                                item(key = ex.id) {
+                                    ExerciseLogCard(
+                                        ex = ex,
+                                        inSuperset = false,
+                                        viewModel = viewModel,
+                                        lastWeights = lastWeights
+                                    )
                                 }
-                            }
-
-                            val targetSets = ex.targetSets.coerceAtLeast(0)
-                            val doneSets = (setNum.toIntOrNull() ?: 1) - 1
-                            val overBy = (doneSets - targetSets).coerceAtLeast(0)
-                            val progress = when {
-                                targetSets <= 0 -> 0f
-                                doneSets >= targetSets -> 1f
-                                else -> doneSets.toFloat() / targetSets
-                            }
-
-                            Card(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                                shape = RoundedCornerShape(16.dp),
-                                elevation = CardDefaults.cardElevation(2.dp)
-                            ) {
-                                Column(modifier = Modifier.padding(16.dp)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(ex.exerciseName, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                                        TextButton(onClick = { viewModel.showHistory(ex.exerciseName, ex.id) }) { Text("История") }
-                                    }
-                                    val planText = if (isCircuit) {
-                                        protocolLabel(ex) ?: "Меткон"
-                                    } else {
-                                        "${ex.targetSets} × ${ex.targetReps}" + (ex.targetWeight?.let { " · ${formatWeight(it)} кг" } ?: "")
-                                    }
-                                    Text(
-                                        "План: $planText",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                    Spacer(modifier = Modifier.height(12.dp))
-
-                                    if (isCircuit) {
-                                        when (protocol) {
-                                            "AMRAP" -> {
-                                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                    OutlinedTextField(
-                                                        value = rounds,
-                                                        onValueChange = {
-                                                            rounds = it
-                                                            circuitError = false
-                                                        },
-                                                        label = { Text("Раундов") },
-                                                        modifier = Modifier.weight(1f),
-                                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                                        shape = RoundedCornerShape(12.dp),
-                                                        textStyle = LocalTextStyle.current.copy(fontSize = 20.sp),
-                                                        isError = circuitError,
-                                                        supportingText = { if (circuitError) Text("Укажите раунды") }
-                                                    )
-                                                    OutlinedTextField(
-                                                        value = extraReps,
-                                                        onValueChange = { extraReps = it },
-                                                        label = { Text("Доп. повт.") },
-                                                        modifier = Modifier.weight(1f),
-                                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                                        shape = RoundedCornerShape(12.dp),
-                                                        textStyle = LocalTextStyle.current.copy(fontSize = 20.sp)
-                                                    )
-                                                }
-                                            }
-                                            "EMOM" -> {
-                                                OutlinedTextField(
-                                                    value = rounds,
-                                                    onValueChange = {
-                                                        rounds = it
-                                                        circuitError = false
-                                                    },
-                                                    label = { Text("Выполнено раундов из ${ex.protocolValue.ifBlank { "?" }}") },
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                                    shape = RoundedCornerShape(12.dp),
-                                                    singleLine = true,
-                                                    textStyle = LocalTextStyle.current.copy(fontSize = 20.sp),
-                                                    isError = circuitError,
-                                                    supportingText = { if (circuitError) Text("Укажите раунды") }
-                                                )
-                                            }
-                                            "FOR_TIME", "RFT" -> {
-                                                OutlinedTextField(
-                                                    value = timeText,
-                                                    onValueChange = {
-                                                        timeText = it
-                                                        circuitError = false
-                                                    },
-                                                    label = { Text("Время (мин:сек)") },
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    shape = RoundedCornerShape(12.dp),
-                                                    singleLine = true,
-                                                    textStyle = LocalTextStyle.current.copy(fontSize = 20.sp),
-                                                    isError = circuitError,
-                                                    supportingText = { if (circuitError) Text("Укажите время, например 12:34") }
-                                                )
-                                            }
-                                            else -> {
-                                                OutlinedTextField(
-                                                    value = freeResult,
-                                                    onValueChange = {
-                                                        freeResult = it
-                                                        circuitError = false
-                                                    },
-                                                    label = { Text("Результат") },
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    shape = RoundedCornerShape(12.dp),
-                                                    isError = circuitError,
-                                                    supportingText = { if (circuitError) Text("Заполните результат") }
-                                                )
-                                            }
-                                        }
-                                    } else {
-                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            OutlinedTextField(
-                                                value = setNum,
-                                                onValueChange = { setNum = it },
-                                                label = { Text("Подх.") },
-                                                modifier = Modifier.weight(0.5f),
-                                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                                shape = RoundedCornerShape(12.dp),
-                                                textStyle = LocalTextStyle.current.copy(fontSize = 20.sp)
-                                            )
-                                            OutlinedTextField(
-                                                value = weight,
-                                                onValueChange = { weight = it },
-                                                label = { Text("Вес") },
-                                                modifier = Modifier.weight(1.2f),
-                                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                                shape = RoundedCornerShape(12.dp),
-                                                textStyle = LocalTextStyle.current.copy(fontSize = 20.sp)
-                                            )
-                                            OutlinedTextField(
-                                                value = reps,
-                                                onValueChange = {
-                                                    reps = it
-                                                    showError = false
-                                                },
-                                                label = { Text("Повт.") },
-                                                modifier = Modifier.weight(0.8f),
-                                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                                shape = RoundedCornerShape(12.dp),
-                                                textStyle = LocalTextStyle.current.copy(fontSize = 20.sp),
-                                                isError = showError,
-                                                supportingText = { if (showError) Text("Укажите повторы") }
-                                            )
-                                        }
-
-                                        Spacer(modifier = Modifier.height(8.dp))
-
-                                        // Шаговые кнопки веса: крупное касание вместо клавиатуры
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            OutlinedButton(
-                                                onClick = {
-                                                    val w = weight.trim().replace(',', '.').toDoubleOrNull() ?: ex.targetWeight ?: 0.0
-                                                    weight = formatWeight((w - 2.5).coerceAtLeast(0.0))
-                                                },
-                                                shape = RoundedCornerShape(12.dp),
-                                                modifier = Modifier.height(44.dp)
-                                            ) {
-                                                Text("− 2.5", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                                            }
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text(
-                                                text = if (weight.isBlank()) "—" else weight.trim(),
-                                                style = MaterialTheme.typography.titleLarge,
-                                                textAlign = TextAlign.Center,
-                                                modifier = Modifier.weight(1f)
-                                            )
-                                            OutlinedButton(
-                                                onClick = {
-                                                    val w = weight.trim().replace(',', '.').toDoubleOrNull() ?: ex.targetWeight ?: 0.0
-                                                    weight = formatWeight((w + 2.5).coerceAtMost(500.0))
-                                                },
-                                                shape = RoundedCornerShape(12.dp),
-                                                modifier = Modifier.height(44.dp)
-                                            ) {
-                                                Text("+ 2.5", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                                            }
-                                        }
-                                    }
-
-                                    if (!isCircuit && targetSets > 0 && doneSets > 0) {
-                                        Spacer(modifier = Modifier.height(10.dp))
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            LinearProgressIndicator(
-                                                progress = progress,
-                                                modifier = Modifier.weight(1f),
-                                                color = if (overBy > 0) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary
-                                            )
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text(
-                                                if (overBy > 0) "$doneSets из $targetSets · +$overBy сверх" else "$doneSets из $targetSets",
-                                                style = MaterialTheme.typography.labelMedium,
-                                                color = if (overBy > 0) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary
-                                            )
-                                        }
-                                    }
-
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    OutlinedTextField(
-                                        value = note,
-                                        onValueChange = { note = it },
-                                        label = { Text("Комментарий") },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        shape = RoundedCornerShape(12.dp)
-                                    )
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    Button(
-                                        onClick = {
-                                            if (isCircuit) {
-                                                // Собираем результат по протоколу
-                                                val result: String? = when (protocol) {
-                                                    "AMRAP" -> {
-                                                        val r = rounds.toIntOrNull()
-                                                        if (r != null && r > 0) "${r}+" + (extraReps.toIntOrNull() ?: 0).toString() else null
-                                                    }
-                                                    "EMOM" -> rounds.toIntOrNull()?.let { "$it/" + ex.protocolValue.ifBlank { "?" } }
-                                                    "FOR_TIME", "RFT" -> timeText.trim().ifBlank { null }
-                                                    else -> freeResult.trim().ifBlank { null }
-                                                }
-                                                if (result == null) {
-                                                    circuitError = true
-                                                    return@Button
-                                                }
-                                                viewModel.saveLog(ex.id, "1", "0", "0", note, true, result)
-                                                showSavedSnackbar("Записано: $result")
-                                                rounds = ""; extraReps = ""; timeText = ""; freeResult = ""
-                                            } else {
-                                                val r = reps.toIntOrNull() ?: 0
-                                                if (r <= 0) {
-                                                    showError = true
-                                                    return@Button
-                                                }
-                                                val s = setNum.toIntOrNull() ?: 1
-                                                viewModel.saveLog(ex.id, setNum, reps, weight, note, false)
-                                                val over = if (targetSets > 0 && s > targetSets) " (сверх плана)" else ""
-                                                showSavedSnackbar("Записано: подход $s, ${weight.trim().ifEmpty { "0" }} кг$over")
-                                                setNum = (s + 1).toString()
-                                                // Вес НЕ сбрасываем: он остаётся в поле
-                                                // и автоматически становится весом следующего подхода.
-                                                // LaunchedEffect выше нужен только для первой подстановки из базы.
-                                            }
-                                            note = ""
-                                        },
-                                        modifier = Modifier.fillMaxWidth().height(52.dp),
-                                        shape = RoundedCornerShape(14.dp)
+                            } else {
+                                item(key = "superset_${groupExs.first().id}") {
+                                    val sets = groupExs.map { it.targetSets }.distinct()
+                                    val roundsLabel = if (sets.size == 1 && sets.first() > 0) " ×${sets.first()}" else ""
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 6.dp)
+                                            .border(1.dp, MaterialTheme.colorScheme.secondary, RoundedCornerShape(12.dp))
+                                            .padding(8.dp)
                                     ) {
-                                        Text("Записать", fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                Icons.Default.Link,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(16.dp),
+                                                tint = MaterialTheme.colorScheme.secondary
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                "Связка$roundsLabel — выполняется непрерывно, подходы общие",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.secondary,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        groupExs.forEach { ex ->
+                                            ExerciseLogCard(
+                                                ex = ex,
+                                                inSuperset = true,
+                                                viewModel = viewModel,
+                                                lastWeights = lastWeights
+                                            )
+                                        }
                                     }
                                 }
                             }

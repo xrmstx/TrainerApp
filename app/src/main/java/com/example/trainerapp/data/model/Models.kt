@@ -150,7 +150,8 @@ data class ClientExercise(
     val note: String? = null,
     val metricType: String = "REPS",
     val protocol: String = "NONE",   // копируется из блока шаблона при назначении программы
-    val protocolValue: String = ""
+    val protocolValue: String = "",
+    val supersetGroup: Int? = null   // связка: копируется из шаблона; null = одиночное
 )
 
 @Entity(
