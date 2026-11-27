@@ -169,7 +169,8 @@ private fun ExerciseLogCard(
     ex: ClientExercise,
     inSuperset: Boolean,
     viewModel: ClientWorkoutLogViewModel,
-    lastWeights: Map<Long, Double?>
+    lastWeights: Map<Long, Double?>,
+    onSaved: (String) -> Unit
 ) {
     val isCircuit = ex.blockType == "CIRCUIT"
     val protocol = ex.protocol
@@ -426,7 +427,7 @@ private fun ExerciseLogCard(
                             return@Button
                         }
                         viewModel.saveLog(ex.id, "1", "0", "0", note, true, result)
-                        showSavedSnackbar("Записано: $result")
+                        onSaved("Записано: $result")
                         rounds = ""; extraReps = ""; timeText = ""; freeResult = ""
                     } else {
                         val r = reps.toIntOrNull() ?: 0
@@ -437,7 +438,7 @@ private fun ExerciseLogCard(
                         val s = setNum.toIntOrNull() ?: 1
                         viewModel.saveLog(ex.id, setNum, reps, weight, note, false)
                         val over = if (targetSets > 0 && s > targetSets) " (сверх плана)" else ""
-                        showSavedSnackbar("Записано: подход $s, ${weight.trim().ifEmpty { "0" }} кг$over")
+                        onSaved("Записано: подход $s, ${weight.trim().ifEmpty { "0" }} кг$over")
                         setNum = (s + 1).toString()
                         // Вес НЕ сбрасываем: он остаётся в поле
                         // и автоматически становится весом следующего подхода.
@@ -560,7 +561,8 @@ fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: ()
                                         ex = ex,
                                         inSuperset = false,
                                         viewModel = viewModel,
-                                        lastWeights = lastWeights
+                                        lastWeights = lastWeights,
+                                        onSaved = { showSavedSnackbar(it) }
                                     )
                                 }
                             } else {
@@ -595,7 +597,8 @@ fun ClientWorkoutLogScreen(workoutId: Long, workoutName: String, onBackClick: ()
                                                 ex = ex,
                                                 inSuperset = true,
                                                 viewModel = viewModel,
-                                                lastWeights = lastWeights
+                                                lastWeights = lastWeights,
+                                                onSaved = { showSavedSnackbar(it) }
                                             )
                                         }
                                     }

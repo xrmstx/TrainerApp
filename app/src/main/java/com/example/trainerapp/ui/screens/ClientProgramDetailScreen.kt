@@ -45,6 +45,8 @@ import com.example.trainerapp.data.local.AppDatabase
 import com.example.trainerapp.data.model.ClientProgram
 import com.example.trainerapp.data.model.ClientWorkout
 import com.example.trainerapp.ui.components.EmptyState
+import com.example.trainerapp.ui.theme.StatusDone
+import com.example.trainerapp.ui.theme.StatusPlanned
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
