@@ -17,15 +17,33 @@ class ClientViewModel(application: Application) : AndroidViewModel(application) 
     private val _newClientName = MutableStateFlow("")
     val newClientName: StateFlow<String> = _newClientName.asStateFlow()
 
+    // Сообщение для пользователя: ошибки вставки, дубли и т.п.
+    private val _snackbarMessage = MutableStateFlow<String?>(null)
+    val snackbarMessage: StateFlow<String?> = _snackbarMessage.asStateFlow()
+
     fun onNameChange(name: String) { _newClientName.value = name }
 
     fun addClient() {
         val name = _newClientName.value.trim()
-        if (name.isNotEmpty()) {
-            viewModelScope.launch {
+
+        // Пустое поле — не ошибка, просто ничего не делаем.
+        // Кнопку в экране лучше гасить: enabled = newClientName.isNotBlank()
+        if (name.isEmpty()) return
+
+        viewModelScope.launch {
+            try {
                 dao.insertClient(Client(name = name))
                 _newClientName.value = ""
+            } catch (e: Exception) {
+                when {
+                    e.message?.contains("UNIQUE") == true ->
+                        _snackbarMessage.value = "Такой клиент уже есть"
+                    else ->
+                        _snackbarMessage.value = "Не удалось добавить клиента. Попробуйте позже."
+                }
             }
         }
     }
+
+    fun clearSnackbar() { _snackbarMessage.value = null }
 }

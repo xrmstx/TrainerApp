@@ -149,6 +149,13 @@ interface AppDao {
     @Query("UPDATE client_workouts SET status = :status WHERE id = :workoutId")
     suspend fun setClientWorkoutStatus(workoutId: Long, status: String)
 
+    // --- Автопереход недель ---
+    @Query("SELECT COUNT(*) FROM client_workouts WHERE clientProgramId = :programId AND weekNumber = :weekNumber")
+    suspend fun countWorkoutsInClientWeek(programId: Long, weekNumber: Int): Int
+
+    @Query("SELECT COUNT(*) FROM client_workouts WHERE clientProgramId = :programId AND weekNumber = :weekNumber AND status = 'DONE'")
+    suspend fun countDoneWorkoutsInClientWeek(programId: Long, weekNumber: Int): Int
+
     // Первая незакрытая тренировка клиента по всем его активным программам
     @Query("""
         SELECT cw.* FROM client_workouts cw
