@@ -70,12 +70,14 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
     private val _exName = MutableStateFlow("")
     private val _exSets = MutableStateFlow("")
     private val _exReps = MutableStateFlow("")
+    private val _exWeight = MutableStateFlow("")
     private val _exNote = MutableStateFlow("")
     private val _exMetric = MutableStateFlow("REPS")
     private val _exType = MutableStateFlow("LINEAR")
     val exName: StateFlow<String> = _exName.asStateFlow()
     val exSets: StateFlow<String> = _exSets.asStateFlow()
     val exReps: StateFlow<String> = _exReps.asStateFlow()
+    val exWeight: StateFlow<String> = _exWeight.asStateFlow()
     val exNote: StateFlow<String> = _exNote.asStateFlow()
     val exMetric: StateFlow<String> = _exMetric.asStateFlow()
     val exType: StateFlow<String> = _exType.asStateFlow()
@@ -159,13 +161,14 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
             _exName.value = ex.exerciseName
             _exSets.value = if (ex.targetSets == 0) "" else ex.targetSets.toString()
             _exReps.value = ex.targetReps
+            _exWeight.value = ex.targetWeight?.let { formatWeight(it) } ?: ""
             _exNote.value = ex.note ?: ""
             _exMetric.value = ex.metricType
             _exType.value = if (ex.targetSets == 0) "CIRCUIT" else "LINEAR"
             _exInSuperset.value = ex.supersetGroup != null
         } else {
             // Тип упражнения наследуется от блока: в Circuit-блоке — Circuit, иначе Linear
-            _exName.value = ""; _exSets.value = ""; _exReps.value = ""; _exNote.value = ""
+            _exName.value = ""; _exSets.value = ""; _exReps.value = ""; _exWeight.value = ""; _exNote.value = ""
             _exMetric.value = "REPS"
             _exType.value = if (block.blockType == "CIRCUIT") "CIRCUIT" else "LINEAR"
             _exInSuperset.value = false
@@ -182,6 +185,7 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
     fun onNameChange(name: String) { _exName.value = name }
     fun onSetsChange(sets: String) { _exSets.value = sets }
     fun onRepsChange(reps: String) { _exReps.value = reps }
+    fun onWeightChange(weight: String) { _exWeight.value = weight }
     fun onNoteChange(note: String) { _exNote.value = note }
     fun onMetricChange(metric: String) { _exMetric.value = metric }
     fun onTypeChange(type: String) { _exType.value = type }
@@ -196,6 +200,33 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
         _showLibrary.value = false
     }
 
+    /**
+     * Пересчёт связок блока: группы должны быть непрерывными цепочками по порядку.
+     * После удаления участника или выключения у него чипа группа может «порваться» —
+     * здесь подряд идущие упражнения с supersetGroup получают новые сквозные номера.
+     */
+    private suspend fun normalizeSupersets(blockId: Long) {
+        val all = dao.getExercisesForBlockSync(blockId).sortedBy { it.order }
+        var group = 0
+        var i = 0
+        while (i < all.size) {
+            if (all[i].supersetGroup != null) {
+                group += 1
+                var j = i
+                while (j < all.size && all[j].supersetGroup != null) {
+                    val ex = all[j]
+                    if (ex.supersetGroup != group) {
+                        dao.updateTemplateExercise(ex.copy(supersetGroup = group))
+                    }
+                    j++
+                }
+                i = j
+            } else {
+                i++
+            }
+        }
+    }
+
     fun addOrEditExercise() {
         val name = _exName.value.trim()
         val reps = _exReps.value.trim()
@@ -205,6 +236,8 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
         val existing = _editExercise.value
         val isCircuit = _exType.value == "CIRCUIT"
         val sets = if (isCircuit) 0 else (_exSets.value.trim().toIntOrNull() ?: 0)
+        // Вес необязателен: пусто или ноль — без веса, иначе дробный с запятой или точкой
+        val weight = _exWeight.value.trim().replace(',', '.').toDoubleOrNull()?.takeIf { it > 0 }
 
         if (name.isEmpty()) return
         // В Circuit у упражнения может не быть повторений — метрика (метры, ккал, время) важнее
@@ -227,11 +260,14 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
                             exerciseName = name,
                             targetSets = sets,
                             targetReps = reps,
+                            targetWeight = weight,
                             note = note.ifEmpty { null },
                             metricType = metric,
                             supersetGroup = supersetGroup
                         )
                     )
+                    // Чип могли выключить у середины группы — приводим связки в порядок
+                    normalizeSupersets(blockId)
                 } else {
                     val order = (dao.getMaxExerciseOrder(blockId) ?: 0) + 1
                     dao.insertTemplateExercise(
@@ -241,7 +277,7 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
                             order = order,
                             targetSets = sets,
                             targetReps = reps,
-                            targetWeight = null,
+                            targetWeight = weight,
                             note = note.ifEmpty { null },
                             metricType = metric,
                             supersetGroup = supersetGroup
@@ -260,6 +296,8 @@ class WorkoutDetailViewModel(application: Application, val workoutId: Long) : An
         viewModelScope.launch {
             try {
                 dao.deleteTemplateExercise(ex.id)
+                // Остатки группы без начала цепочки — тоже чиним
+                normalizeSupersets(ex.blockId)
                 loadBlocks()
             } catch (e: Exception) {
                 _blockError.value = e.message ?: e.toString()
@@ -347,11 +385,13 @@ private fun TemplateExerciseCard(
                     Text(ex.note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                 }
             }
-            val plan = if (ex.targetSets == 0) {
+            val base = if (ex.targetSets == 0) {
                 // Circuit: показываем метрику, если повторения не заданы (метры, ккал, время)
                 if (ex.targetReps.isBlank()) metricLabels.firstOrNull { it.first == ex.metricType }?.second ?: ""
                 else ex.targetReps
             } else "${ex.targetSets}×${ex.targetReps}"
+            // Заданный вес виден сразу: «4×5 · 40 кг»
+            val plan = ex.targetWeight?.let { "$base · ${formatWeight(it)} кг" } ?: base
             if (plan.isNotBlank()) {
                 Text(plan, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             }
@@ -379,6 +419,7 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
     val exName by viewModel.exName.collectAsState()
     val exSets by viewModel.exSets.collectAsState()
     val exReps by viewModel.exReps.collectAsState()
+    val exWeight by viewModel.exWeight.collectAsState()
     val exNote by viewModel.exNote.collectAsState()
     val exMetric by viewModel.exMetric.collectAsState()
     val exType by viewModel.exType.collectAsState()
@@ -564,6 +605,15 @@ fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () ->
                             singleLine = true
                         )
                     }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = exWeight,
+                        onValueChange = { viewModel.onWeightChange(it) },
+                        label = { Text("Вес, кг (необязательно)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        singleLine = true
+                    )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text("Метрика", style = MaterialTheme.typography.labelMedium)
                     Row(
