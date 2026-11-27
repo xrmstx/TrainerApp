@@ -14,7 +14,7 @@ import com.example.trainerapp.data.model.*
         TemplateExercise::class, ClientProgram::class, ClientWorkout::class,
         ClientExercise::class, ExerciseLog::class, ClientMeasurement::class
     ],
-    version = 15,
+    version = 16,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -132,6 +132,15 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // Стабильный ключ упражнения: история не рвётся при переименовании.
+        // Колонки nullable: старые записи остаются без ключа и ищутся по имени.
+        private val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `template_exercises` ADD COLUMN `exerciseKey` TEXT")
+                db.execSQL("ALTER TABLE `client_exercises` ADD COLUMN `exerciseKey` TEXT")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -139,7 +148,10 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "fitness_database"
                 )
-                    .addMigrations(MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15)
+                    .addMigrations(
+                        MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
+                        MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16
+                    )
                     .build()
                 INSTANCE = instance
                 instance

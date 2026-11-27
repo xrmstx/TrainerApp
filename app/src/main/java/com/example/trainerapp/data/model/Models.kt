@@ -81,7 +81,10 @@ data class TemplateExercise(
     val targetWeight: Double?,
     val note: String? = null,
     val metricType: String = "REPS", // REPS, WEIGHT, TIME, DISTANCE, CALORIES
-    val supersetGroup: Int? = null   // null = одиночное; одинаковый номер = связка A1/A2/A3
+    val supersetGroup: Int? = null,  // null = одиночное; одинаковый номер = связка A1/A2/A3
+    // Стабильный ключ истории: переименование не рвёт связь с логами.
+    // null = старые записи, история ищется по имени (обратная совместимость).
+    val exerciseKey: String? = null
 )
 
 // Имя программы копируем при назначении: если шаблон удалят, программа останется с внятным названием
@@ -151,7 +154,8 @@ data class ClientExercise(
     val metricType: String = "REPS",
     val protocol: String = "NONE",   // копируется из блока шаблона при назначении программы
     val protocolValue: String = "",
-    val supersetGroup: Int? = null   // связка: копируется из шаблона; null = одиночное
+    val supersetGroup: Int? = null,  // связка: копируется из шаблона; null = одиночное
+    val exerciseKey: String? = null  // копируется из шаблона при назначении; null = история по имени
 )
 
 @Entity(

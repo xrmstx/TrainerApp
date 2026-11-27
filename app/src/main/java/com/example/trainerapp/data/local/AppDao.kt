@@ -191,17 +191,22 @@ interface AppDao {
     @Query("DELETE FROM exercise_logs WHERE id = :logId")
     suspend fun deleteLog(logId: Long)
 
-    // Кросс-сессионная история: все логи упражнения клиента по его имени
+    // Кросс-сессионная история упражнения клиента:
+    // по стабильному ключу, если он есть; для старых записей (key = null) — по имени.
     @Query("""
         SELECT exercise_logs.* FROM exercise_logs
         JOIN client_exercises ON client_exercises.id = exercise_logs.clientExerciseId
         JOIN client_workouts ON client_workouts.id = client_exercises.clientWorkoutId
         JOIN client_programs ON client_programs.id = client_workouts.clientProgramId
-        WHERE client_programs.clientId = :clientId AND client_exercises.exerciseName = :exerciseName
+        WHERE client_programs.clientId = :clientId
+          AND (
+                (:key IS NOT NULL AND client_exercises.exerciseKey = :key)
+             OR (:key IS NULL AND client_exercises.exerciseName = :name)
+          )
         ORDER BY exercise_logs.date DESC
         LIMIT 30
     """)
-    suspend fun getHistoryForExercise(clientId: Long, exerciseName: String): List<ExerciseLog>
+    suspend fun getHistoryForExercise(clientId: Long, key: String?, name: String): List<ExerciseLog>
 
     @Query("""
         SELECT client_programs.clientId FROM client_programs

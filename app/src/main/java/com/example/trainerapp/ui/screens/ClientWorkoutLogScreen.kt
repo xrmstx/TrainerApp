@@ -82,11 +82,11 @@ class ClientWorkoutLogViewModel(application: Application, val workoutId: Long) :
         }
     }
 
-    fun showHistory(exerciseName: String, exerciseId: Long) {
+    fun showHistory(exerciseName: String, exerciseId: Long, exerciseKey: String?) {
         viewModelScope.launch {
             val clientId = _clientId.value
             val logs = if (clientId != null) {
-                dao.getHistoryForExercise(clientId, exerciseName)
+                dao.getHistoryForExercise(clientId, exerciseKey, exerciseName)
             } else {
                 dao.getLogsForExerciseSync(exerciseId)
             }
@@ -245,7 +245,7 @@ private fun ExerciseLogCard(
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(ex.exerciseName, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                TextButton(onClick = { viewModel.showHistory(ex.exerciseName, ex.id) }) { Text("История") }
+                TextButton(onClick = { viewModel.showHistory(ex.exerciseName, ex.id, ex.exerciseKey) }) { Text("История") }
             }
             // У участника связки подходы уже указаны в заголовке связки — тут только повторы и вес
             val planText = if (isCircuit) {
