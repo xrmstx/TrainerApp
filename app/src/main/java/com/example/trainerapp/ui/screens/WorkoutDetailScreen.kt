@@ -4,10 +4,13 @@ import android.app.Application
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -22,476 +25,644 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.room.withTransaction
 import com.example.trainerapp.data.local.AppDatabase
-import com.example.trainerapp.data.model.*
+import com.example.trainerapp.data.model.ExerciseBlock
+import com.example.trainerapp.data.model.TemplateExercise
+import com.example.trainerapp.data.library.ExerciseLibraryRegistry
+import com.example.trainerapp.data.library.LibraryEntry
 import com.example.trainerapp.ui.components.EmptyState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class ClientDetailViewModel(
-    application: Application,
-    val clientId: Long
-) : AndroidViewModel(application) {
-
+class WorkoutDetailViewModel(application: Application, val workoutId: Long) : AndroidViewModel(application) {
     private val dao = AppDatabase.getDatabase(application).appDao()
 
-    val programs = dao.getProgramsForClient(clientId)
-    val templates = dao.getAllMacrocycles()
+    private val _blocks = MutableStateFlow<List<ExerciseBlock>>(emptyList())
+    val blocks: StateFlow<List<ExerciseBlock>> = _blocks.asStateFlow()
+    private val _blockExercises = MutableStateFlow<Map<Long, List<TemplateExercise>>>(emptyMap())
+    val blockExercises: StateFlow<Map<Long, List<TemplateExercise>>> = _blockExercises.asStateFlow()
 
-    private val _client = MutableStateFlow<Client?>(null)
-    val client: StateFlow<Client?> = _client.asStateFlow()
+    private val _showBlockDialog = MutableStateFlow(false)
+    val showBlockDialog: StateFlow<Boolean> = _showBlockDialog.asStateFlow()
+    private val _newBlockTitle = MutableStateFlow("")
+    val newBlockTitle: StateFlow<String> = _newBlockTitle.asStateFlow()
+    private val _blockType = MutableStateFlow("LINEAR")
+    val blockType: StateFlow<String> = _blockType.asStateFlow()
+    private val _protocol = MutableStateFlow("AMRAP")
+    val protocol: StateFlow<String> = _protocol.asStateFlow()
+    private val _protocolValue = MutableStateFlow("")
+    val protocolValue: StateFlow<String> = _protocolValue.asStateFlow()
 
-    private val _showDialog = MutableStateFlow(false)
-    val showDialog: StateFlow<Boolean> = _showDialog.asStateFlow()
+    private val _blockError = MutableStateFlow<String?>(null)
+    val blockError: StateFlow<String?> = _blockError.asStateFlow()
 
-    private val _showEditDialog = MutableStateFlow(false)
-    val showEditDialog: StateFlow<Boolean> = _showEditDialog.asStateFlow()
+    private val _showExerciseDialog = MutableStateFlow(false)
+    val showExerciseDialog: StateFlow<Boolean> = _showExerciseDialog.asStateFlow()
+    private val _currentBlockId = MutableStateFlow<Long?>(null)
+    private val _currentBlockIsCircuit = MutableStateFlow(false)
+    val currentBlockIsCircuit: StateFlow<Boolean> = _currentBlockIsCircuit.asStateFlow()
+    private val _editExercise = MutableStateFlow<TemplateExercise?>(null)
+    val editExercise: StateFlow<TemplateExercise?> = _editExercise.asStateFlow()
 
-    private val _isAssigning = MutableStateFlow(false)
-    val isAssigning: StateFlow<Boolean> = _isAssigning.asStateFlow()
+    private val _exName = MutableStateFlow("")
+    private val _exSets = MutableStateFlow("")
+    private val _exReps = MutableStateFlow("")
+    private val _exNote = MutableStateFlow("")
+    private val _exMetric = MutableStateFlow("REPS")
+    private val _exType = MutableStateFlow("LINEAR")
+    val exName: StateFlow<String> = _exName.asStateFlow()
+    val exSets: StateFlow<String> = _exSets.asStateFlow()
+    val exReps: StateFlow<String> = _exReps.asStateFlow()
+    val exNote: StateFlow<String> = _exNote.asStateFlow()
+    val exMetric: StateFlow<String> = _exMetric.asStateFlow()
+    val exType: StateFlow<String> = _exType.asStateFlow()
 
-    init {
+    private val _exInSuperset = MutableStateFlow(false)
+    val exInSuperset: StateFlow<Boolean> = _exInSuperset.asStateFlow()
+
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+    private val _showLibrary = MutableStateFlow(false)
+    val showLibrary: StateFlow<Boolean> = _showLibrary.asStateFlow()
+
+    init { loadBlocks() }
+    fun loadBlocks() {
         viewModelScope.launch {
-            _client.value = dao.getClientSync(clientId)
+            val list = dao.getBlocksForWorkoutSync(workoutId)
+            _blocks.value = list
+            val map = mutableMapOf<Long, List<TemplateExercise>>()
+            list.forEach { block -> map[block.id] = dao.getExercisesForBlockSync(block.id) }
+            _blockExercises.value = map
         }
     }
 
-    fun openDialog() { _showDialog.value = true }
-    fun closeDialog() { _showDialog.value = false }
-    fun toggleEditDialog() { _showEditDialog.value = !_showEditDialog.value }
+    fun openBlockDialog() { _showBlockDialog.value = true; _newBlockTitle.value = ""; _blockType.value = "LINEAR"; _protocol.value = "AMRAP"; _protocolValue.value = "" }
+    fun closeBlockDialog() { _showBlockDialog.value = false }
+    fun onBlockTitleChange(title: String) { _newBlockTitle.value = title }
+    fun onBlockTypeChange(type: String) {
+        _blockType.value = type
+        if (type != "CIRCUIT") { _protocol.value = "AMRAP"; _protocolValue.value = "" }
+    }
+    fun onProtocolChange(protocol: String) { _protocol.value = protocol; _protocolValue.value = "" }
+    fun onProtocolValueChange(value: String) { _protocolValue.value = value }
 
-    fun updateClient(goal: String, notes: String) {
+    fun clearBlockError() { _blockError.value = null }
+
+    fun addBlock() {
+        val title = _newBlockTitle.value.trim()
+        if (title.isEmpty()) return
         viewModelScope.launch {
-            val current = _client.value ?: return@launch
-            val updated = current.copy(
-                goal = goal.trim().ifEmpty { null },
-                notes = notes.trim().ifEmpty { null }
-            )
-            dao.insertClient(updated)
-            _client.value = updated
-            toggleEditDialog()
-        }
-    }
-
-    // Каскад по внешним ключам чистит программы, тренировки, упражнения и логи
-    fun deleteClient() {
-        viewModelScope.launch { dao.deleteClient(clientId) }
-    }
-
-    // Каскад чистит тренировки, упражнения и логи программы
-    fun deleteProgram(programId: Long) {
-        viewModelScope.launch { dao.deleteClientProgram(programId) }
-    }
-
-    fun assignProgram(macrocycle: Macrocycle) {
-        if (_isAssigning.value) return
-        _isAssigning.value = true
-        _showDialog.value = false
-        viewModelScope.launch {
-            val db = AppDatabase.getDatabase(getApplication())
-            db.withTransaction {
-                val programId = dao.insertClientProgram(
-                    ClientProgram(
-                        clientId = clientId,
-                        macrocycleId = macrocycle.id,
-                        name = macrocycle.name,
-                        weekNumber = 1,
-                        totalWeeks = macrocycle.durationWeeks
+            try {
+                val order = (dao.getMaxBlockOrder(workoutId) ?: 0) + 1
+                val type = _blockType.value
+                // Протокол имеет смысл только у Circuit-блока
+                val protocol = if (type == "CIRCUIT") _protocol.value else "NONE"
+                val protocolValue = if (type == "CIRCUIT") _protocolValue.value.trim() else ""
+                dao.insertExerciseBlock(
+                    ExerciseBlock(
+                        workoutId = workoutId,
+                        blockTitle = title,
+                        blockType = type,
+                        order = order,
+                        protocol = protocol,
+                        protocolValue = protocolValue
                     )
                 )
+                loadBlocks()
+                closeBlockDialog()
+            } catch (e: Exception) {
+                _blockError.value = e.message ?: e.toString()
+            }
+        }
+    }
 
-                // Копируем все недели шаблона: каждая тренировка получает свой weekNumber и dayType
-                dao.getWorkoutsForMacroSync(macrocycle.id).forEach { originalWorkout ->
-                    val newWorkoutId = dao.insertClientWorkout(
-                        ClientWorkout(
-                            clientProgramId = programId,
-                            originalWorkoutId = originalWorkout.id,
-                            weekNumber = originalWorkout.weekNumber,
-                            dayNumber = originalWorkout.dayNumber,
-                            dayType = originalWorkout.dayType,
-                            name = originalWorkout.name
+    fun deleteBlock(blockId: Long) {
+        viewModelScope.launch {
+            try {
+                dao.deleteExerciseBlock(blockId) // каскад удалит и упражнения блока
+                loadBlocks()
+            } catch (e: Exception) {
+                _blockError.value = e.message ?: e.toString()
+            }
+        }
+    }
+
+    fun openExerciseDialog(block: ExerciseBlock, ex: TemplateExercise? = null) {
+        _currentBlockId.value = block.id
+        _currentBlockIsCircuit.value = block.blockType == "CIRCUIT"
+        _editExercise.value = ex
+        _showExerciseDialog.value = true
+        if (ex != null) {
+            _exName.value = ex.exerciseName
+            _exSets.value = if (ex.targetSets == 0) "" else ex.targetSets.toString()
+            _exReps.value = ex.targetReps
+            _exNote.value = ex.note ?: ""
+            _exMetric.value = ex.metricType
+            _exType.value = if (ex.targetSets == 0) "CIRCUIT" else "LINEAR"
+            _exInSuperset.value = ex.supersetGroup != null
+        } else {
+            // Тип упражнения наследуется от блока: в Circuit-блоке — Circuit, иначе Linear
+            _exName.value = ""; _exSets.value = ""; _exReps.value = ""; _exNote.value = ""
+            _exMetric.value = "REPS"
+            _exType.value = if (block.blockType == "CIRCUIT") "CIRCUIT" else "LINEAR"
+            _exInSuperset.value = false
+        }
+    }
+
+    fun closeExerciseDialog() {
+        _showExerciseDialog.value = false
+        _editExercise.value = null
+        _currentBlockId.value = null
+        _currentBlockIsCircuit.value = false
+    }
+
+    fun onNameChange(name: String) { _exName.value = name }
+    fun onSetsChange(sets: String) { _exSets.value = sets }
+    fun onRepsChange(reps: String) { _exReps.value = reps }
+    fun onNoteChange(note: String) { _exNote.value = note }
+    fun onMetricChange(metric: String) { _exMetric.value = metric }
+    fun onTypeChange(type: String) { _exType.value = type }
+    fun onSupersetChange(inSuperset: Boolean) { _exInSuperset.value = inSuperset }
+
+    fun loadLibrary() { _showLibrary.value = true }
+    fun closeLibrary() { _showLibrary.value = false }
+    fun onSearchChange(query: String) { _searchQuery.value = query }
+
+    fun applyFromLibrary(entry: LibraryEntry) {
+        _exName.value = entry.exerciseName
+        _showLibrary.value = false
+    }
+
+    fun addOrEditExercise() {
+        val name = _exName.value.trim()
+        val reps = _exReps.value.trim()
+        val note = _exNote.value.trim()
+        val metric = _exMetric.value
+        val blockId = _currentBlockId.value ?: return
+        val existing = _editExercise.value
+        val isCircuit = _exType.value == "CIRCUIT"
+        val sets = if (isCircuit) 0 else (_exSets.value.trim().toIntOrNull() ?: 0)
+
+        if (name.isEmpty()) return
+        // В Circuit у упражнения может не быть повторений — метрика (метры, ккал, время) важнее
+        if (!isCircuit && (reps.isEmpty() || sets <= 0)) return
+
+        val inSuperset = _exInSuperset.value && !isCircuit
+        var supersetGroup: Int? = null
+
+        viewModelScope.launch {
+            try {
+                if (inSuperset) {
+                    val all = dao.getExercisesForBlockSync(blockId).sortedBy { it.order }
+                    val others = if (existing != null) all.filter { it.id != existing.id } else all
+                    val prev = others.lastOrNull()
+                    supersetGroup = prev?.supersetGroup ?: ((others.mapNotNull { it.supersetGroup }.maxOrNull() ?: 0) + 1)
+                }
+                if (existing != null) {
+                    dao.updateTemplateExercise(
+                        existing.copy(
+                            exerciseName = name,
+                            targetSets = sets,
+                            targetReps = reps,
+                            note = note.ifEmpty { null },
+                            metricType = metric,
+                            supersetGroup = supersetGroup
                         )
                     )
-
-                    dao.getBlocksForWorkoutSync(originalWorkout.id).forEach { block ->
-                        dao.getExercisesForBlockSync(block.id).forEach { exercise ->
-                            dao.insertClientExercise(
-                                ClientExercise(
-                                    clientWorkoutId = newWorkoutId,
-                                    exerciseName = exercise.exerciseName,
-                                    order = exercise.order,
-                                    blockTitle = block.blockTitle,
-                                    blockType = block.blockType,
-                                    blockOrder = block.order,
-                                    targetSets = exercise.targetSets,
-                                    targetReps = exercise.targetReps,
-                                    targetWeight = exercise.targetWeight,
-                                    note = exercise.note,
-                                    metricType = exercise.metricType,
-                                    protocol = block.protocol,
-                                    protocolValue = block.protocolValue,
-                                    supersetGroup = exercise.supersetGroup
-                                )
-                            )
-                        }
-                    }
+                } else {
+                    val order = (dao.getMaxExerciseOrder(blockId) ?: 0) + 1
+                    dao.insertTemplateExercise(
+                        TemplateExercise(
+                            blockId = blockId,
+                            exerciseName = name,
+                            order = order,
+                            targetSets = sets,
+                            targetReps = reps,
+                            targetWeight = null,
+                            note = note.ifEmpty { null },
+                            metricType = metric,
+                            supersetGroup = supersetGroup
+                        )
+                    )
                 }
+                loadBlocks()
+                closeExerciseDialog()
+            } catch (e: Exception) {
+                _blockError.value = e.message ?: e.toString()
             }
-            _isAssigning.value = false
+        }
+    }
+
+    fun deleteExercise(ex: TemplateExercise) {
+        viewModelScope.launch {
+            try {
+                dao.deleteTemplateExercise(ex.id)
+                loadBlocks()
+            } catch (e: Exception) {
+                _blockError.value = e.message ?: e.toString()
+            }
         }
     }
 }
 
-class ClientDetailViewModelFactory(
-    private val application: Application,
-    private val clientId: Long
-) : ViewModelProvider.Factory {
+class WorkoutDetailViewModelFactory(private val application: Application, private val workoutId: Long) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(ClientDetailViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST") return ClientDetailViewModel(application, clientId) as T
+        if (modelClass.isAssignableFrom(WorkoutDetailViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST") return WorkoutDetailViewModel(application, workoutId) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }
 }
 
+private val metricLabels = listOf(
+    "REPS" to "Повт.", "WEIGHT" to "Вес", "TIME" to "Время", "DISTANCE" to "Дист.", "CALORIES" to "Ккал"
+)
+
+private val protocolLabels = listOf(
+    "AMRAP" to "AMRAP", "EMOM" to "EMOM", "FOR_TIME" to "For Time",
+    "RFT" to "RFT", "TABATA" to "Tabata", "CUSTOM" to "Свой"
+)
+
+private val protocolHints = mapOf(
+    "AMRAP" to "Время, мин (например, 10)",
+    "EMOM" to "Длительность, мин (например, 12)",
+    "FOR_TIME" to "Схема (например, 21-15-9)",
+    "RFT" to "Раундов на время (например, 3)",
+    "TABATA" to "Схема (например, 20/10×8)",
+    "CUSTOM" to "Схема свободно"
+)
+
+private fun protocolBadge(block: ExerciseBlock): String? {
+    if (block.blockType != "CIRCUIT" || block.protocol == "NONE") return null
+    return when (block.protocol) {
+        "AMRAP" -> "AMRAP ${block.protocolValue} мин"
+        "EMOM" -> "EMOM ${block.protocolValue} мин"
+        "FOR_TIME" -> "For Time" + (if (block.protocolValue.isNotBlank()) " · ${block.protocolValue}" else "")
+        "RFT" -> "RFT ${block.protocolValue}"
+        "TABATA" -> "Tabata ${block.protocolValue}"
+        "CUSTOM" -> if (block.protocolValue.isNotBlank()) block.protocolValue else "Своя схема"
+        else -> null
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-fun ClientDetailScreen(
-    clientId: Long,
-    onBackClick: () -> Unit,
-    onProgramClick: (Long, String) -> Unit,
-    onHistoryClick: () -> Unit,
-    onMeasurementsClick: (Long, String) -> Unit
-) {
+fun WorkoutDetailScreen(workoutId: Long, workoutName: String, onBackClick: () -> Unit) {
     val context = LocalContext.current
     val application = context.applicationContext as Application
+    val viewModel: WorkoutDetailViewModel = viewModel(factory = WorkoutDetailViewModelFactory(application, workoutId))
 
-    val viewModel: ClientDetailViewModel = viewModel(
-        factory = ClientDetailViewModelFactory(application, clientId)
-    )
+    val blocks by viewModel.blocks.collectAsState()
+    val blockExercises by viewModel.blockExercises.collectAsState()
+    val showBlockDialog by viewModel.showBlockDialog.collectAsState()
+    val newBlockTitle by viewModel.newBlockTitle.collectAsState()
+    val blockType by viewModel.blockType.collectAsState()
+    val protocol by viewModel.protocol.collectAsState()
+    val protocolValue by viewModel.protocolValue.collectAsState()
+    val showExerciseDialog by viewModel.showExerciseDialog.collectAsState()
+    val isEditing by viewModel.editExercise.collectAsState()
+    val blockIsCircuit by viewModel.currentBlockIsCircuit.collectAsState()
+    val exName by viewModel.exName.collectAsState()
+    val exSets by viewModel.exSets.collectAsState()
+    val exReps by viewModel.exReps.collectAsState()
+    val exNote by viewModel.exNote.collectAsState()
+    val exMetric by viewModel.exMetric.collectAsState()
+    val exType by viewModel.exType.collectAsState()
+    val showLibrary by viewModel.showLibrary.collectAsState()
+    val searchQuery by viewModel.searchQuery.collectAsState()
+    val blockError by viewModel.blockError.collectAsState()
+    val exInSuperset by viewModel.exInSuperset.collectAsState()
 
-    val client by viewModel.client.collectAsState()
-    val programs by viewModel.programs.collectAsState(initial = emptyList())
-    val templates by viewModel.templates.collectAsState(initial = emptyList())
-    val showDialog by viewModel.showDialog.collectAsState()
-    val showEditDialog by viewModel.showEditDialog.collectAsState()
-    val isAssigning by viewModel.isAssigning.collectAsState()
+    var blockToDelete by remember { mutableStateOf<ExerciseBlock?>(null) }
 
-    var programToDelete by remember { mutableStateOf<ClientProgram?>(null) }
-    var confirmDeleteClient by remember { mutableStateOf(false) }
-
-    if (confirmDeleteClient) {
+    blockError?.let { message ->
         AlertDialog(
-            onDismissRequest = { confirmDeleteClient = false },
-            title = { Text("Удалить клиента?") },
-            text = {
-                Text(
-                    "Клиент «${client?.name ?: ""}» и все его программы, тренировки и история будут удалены безвозвратно."
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.deleteClient()
-                    confirmDeleteClient = false
-                    onBackClick()
-                }) { Text("Удалить", color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmDeleteClient = false }) { Text("Отмена") }
-            }
+            onDismissRequest = { viewModel.clearBlockError() },
+            title = { Text("Ошибка") },
+            text = { Text(message) },
+            confirmButton = { TextButton(onClick = { viewModel.clearBlockError() }) { Text("Понятно") } }
         )
     }
 
-    if (programToDelete != null) {
+    if (blockToDelete != null) {
         AlertDialog(
-            onDismissRequest = { programToDelete = null },
-            title = { Text("Удалить программу?") },
-            text = {
-                Text(
-                    "«${programToDelete!!.name.ifEmpty { "Программа" }}» со всеми тренировками и историей будет удалена безвозвратно."
-                )
-            },
+            onDismissRequest = { blockToDelete = null },
+            title = { Text("Удалить блок?") },
+            text = { Text("Блок «${blockToDelete!!.blockTitle}» и все упражнения в нём будут удалены безвозвратно.") },
             confirmButton = {
                 TextButton(onClick = {
-                    viewModel.deleteProgram(programToDelete!!.id)
-                    programToDelete = null
+                    viewModel.deleteBlock(blockToDelete!!.id)
+                    blockToDelete = null
                 }) { Text("Удалить", color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = {
-                TextButton(onClick = { programToDelete = null }) { Text("Отмена") }
-            }
+            dismissButton = { TextButton(onClick = { blockToDelete = null }) { Text("Отмена") } }
         )
     }
 
-    // Диалог редактирования: открываем только когда клиент загружен,
-    // иначе пустые поля затёрли бы данные при сохранении
-    if (showEditDialog) {
-        val currentClient = client
-        if (currentClient != null) {
-            var goal by remember(currentClient.id) { mutableStateOf(currentClient.goal ?: "") }
-            var notes by remember(currentClient.id) { mutableStateOf(currentClient.notes ?: "") }
-
-            AlertDialog(
-                onDismissRequest = { viewModel.toggleEditDialog() },
-                title = { Text("Редактировать профиль") },
-                text = {
-                    Column {
-                        OutlinedTextField(
-                            value = goal,
-                            onValueChange = { goal = it },
-                            label = { Text("Цель") },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
+    if (showBlockDialog) {
+        AlertDialog(
+            onDismissRequest = { viewModel.closeBlockDialog() },
+            title = { Text("Новый блок") },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    OutlinedTextField(
+                        value = newBlockTitle,
+                        onValueChange = { viewModel.onBlockTitleChange(it) },
+                        label = { Text("Название (Разминка, Силовая, Меткон)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = blockType == "LINEAR",
+                            onClick = { viewModel.onBlockTypeChange("LINEAR") },
+                            label = { Text("Подходы") }
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = notes,
-                            onValueChange = { notes = it },
-                            label = { Text("Заметки") },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
+                        FilterChip(
+                            selected = blockType == "CIRCUIT",
+                            onClick = { viewModel.onBlockTypeChange("CIRCUIT") },
+                            label = { Text("Меткон") }
                         )
                     }
-                },
-                confirmButton = {
-                    TextButton(onClick = { viewModel.updateClient(goal, notes) }) { Text("Сохранить") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { viewModel.toggleEditDialog() }) { Text("Отмена") }
+                    if (blockType == "CIRCUIT") {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text("Протокол", style = MaterialTheme.typography.labelMedium)
+                        Row(
+                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            protocolLabels.forEach { (value, label) ->
+                                FilterChip(
+                                    selected = protocol == value,
+                                    onClick = { viewModel.onProtocolChange(value) },
+                                    label = { Text(label) }
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = protocolValue,
+                            onValueChange = { viewModel.onProtocolValueChange(it) },
+                            label = { Text(protocolHints[protocol] ?: "Значение") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            singleLine = true
+                        )
+                    }
                 }
-            )
-        }
+            },
+            confirmButton = { TextButton(onClick = { viewModel.addBlock() }) { Text("Добавить") } },
+            dismissButton = { TextButton(onClick = { viewModel.closeBlockDialog() }) { Text("Отмена") } }
+        )
     }
 
-    if (showDialog) {
+    if (showExerciseDialog) {
+        // Подсказки из библиотеки: пока имя не совпало с найденным целиком
+        val suggestions = remember(exName) {
+            val query = exName.trim()
+            if (query.isEmpty()) emptyList()
+            else ExerciseLibraryRegistry.search(query)
+                .filter { !it.exerciseName.equals(query, ignoreCase = true) }
+                .take(5)
+        }
+
         AlertDialog(
-            onDismissRequest = { viewModel.closeDialog() },
-            title = { Text("Выберите шаблон") },
+            onDismissRequest = { viewModel.closeExerciseDialog() },
+            title = { Text(if (isEditing != null) "Редактировать упражнение" else "Новое упражнение") },
             text = {
-                if (templates.isEmpty()) {
-                    Text("У вас нет созданных шаблонов.")
-                } else {
-                    LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
-                        items(templates, key = { it.id }) { macro ->
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    OutlinedTextField(
+                        value = exName,
+                        onValueChange = { viewModel.onNameChange(it) },
+                        label = { Text("Упражнение") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        singleLine = true
+                    )
+                    if (suggestions.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        suggestions.forEach { entry ->
                             Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp)
-                                    .combinedClickable(onClick = { viewModel.assignProgram(macro) }),
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp).combinedClickable(
+                                    onClick = { viewModel.applyFromLibrary(entry) }
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                            ) {
+                                Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+                                    Text(entry.exerciseName, style = MaterialTheme.typography.bodyMedium)
+                                    Text(
+                                        "${entry.libraryTitle} · ${entry.categoryTitle}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    if (!blockIsCircuit) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = exSets,
+                                onValueChange = { viewModel.onSetsChange(it) },
+                                label = { Text("Подходов") },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp),
+                                singleLine = true
+                            )
+                            OutlinedTextField(
+                                value = exReps,
+                                onValueChange = { viewModel.onRepsChange(it) },
+                                label = { Text(if (exMetric == "TIME") "Время" else if (exMetric == "DISTANCE") "Метры" else if (exMetric == "CALORIES") "Ккал" else "Повторы") },
+                                modifier = Modifier.weight(1.4f),
+                                shape = RoundedCornerShape(12.dp),
+                                singleLine = true
+                            )
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        // В Circuit-блоке схема уже задана протоколом блока — тут только количество на раунд
+                        OutlinedTextField(
+                            value = exReps,
+                            onValueChange = { viewModel.onRepsChange(it) },
+                            label = { Text(if (exMetric == "TIME") "Время" else if (exMetric == "DISTANCE") "Метры" else if (exMetric == "CALORIES") "Ккал" else "Повторов на раунд") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            singleLine = true
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Метрика", style = MaterialTheme.typography.labelMedium)
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        metricLabels.forEach { (value, label) ->
+                            FilterChip(
+                                selected = exMetric == value,
+                                onClick = { viewModel.onMetricChange(value) },
+                                label = { Text(label) }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    FilterChip(
+                        selected = exInSuperset,
+                        onClick = { viewModel.onSupersetChange(!exInSuperset) },
+                        label = { Text("В связку с предыдущим") }
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = exNote,
+                        onValueChange = { viewModel.onNoteChange(it) },
+                        label = { Text("Комментарий") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TextButton(onClick = { viewModel.loadLibrary() }) {
+                        Icon(Icons.Default.Search, contentDescription = null)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Выбрать из библиотеки")
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { viewModel.addOrEditExercise() }) { Text("Сохранить") } },
+            dismissButton = { TextButton(onClick = { viewModel.closeExerciseDialog() }) { Text("Отмена") } }
+        )
+    }
+
+    if (showLibrary) {
+        AlertDialog(
+            onDismissRequest = { viewModel.closeLibrary() },
+            title = { Text("Библиотека упражнений") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { viewModel.onSearchChange(it) },
+                        label = { Text("Поиск...") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    val results = ExerciseLibraryRegistry.search(searchQuery)
+                    if (results.isEmpty()) Text("Ничего не найдено.")
+                    else LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
+                        items(results) { entry ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                                    .combinedClickable(onClick = { viewModel.applyFromLibrary(entry) }),
                                 shape = RoundedCornerShape(12.dp)
                             ) {
-                                Text(
-                                    text = "${macro.name} · ${macro.durationWeeks} нед. · ${macro.sessionsPerWeek} трен./нед.",
-                                    modifier = Modifier.padding(16.dp),
-                                    style = MaterialTheme.typography.titleMedium
-                                )
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text(entry.exerciseName, style = MaterialTheme.typography.bodyLarge)
+                                    Text(
+                                        "${entry.libraryTitle} · ${entry.categoryTitle}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                    )
+                                }
                             }
                         }
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { viewModel.closeDialog() }) { Text("Отмена") } }
+            confirmButton = { TextButton(onClick = { viewModel.closeLibrary() }) { Text("Закрыть") } }
         )
     }
 
     Scaffold(
-        containerColor = Color.Transparent,
+    containerColor = Color.Transparent,
+    
         topBar = {
             TopAppBar(
-                title = {
-                    Text(
-                        text = client?.name ?: "Профиль",
-                        fontWeight = FontWeight.Bold
-                    )
-                },
+                title = { Text(workoutName, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
-                    }
+                    IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, contentDescription = "Назад") }
                 },
                 actions = {
-                    // Кнопки видимы только после загрузки клиента
-                    if (client != null) {
-                        IconButton(onClick = { viewModel.toggleEditDialog() }) {
-                            Icon(Icons.Default.Edit, contentDescription = "Редактировать")
-                        }
-                        IconButton(onClick = { confirmDeleteClient = true }) {
-                            Icon(Icons.Default.Delete, contentDescription = "Удалить клиента")
-                        }
-                    }
+                    IconButton(onClick = { viewModel.openBlockDialog() }) { Icon(Icons.Default.Add, contentDescription = "Добавить блок") }
                 }
             )
         }
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp)
-        ) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                elevation = CardDefaults.cardElevation(3.dp)
-            ) {
-                val currentClient = client
-                if (currentClient != null) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        currentClient.goal?.let { goal ->
-                            Text(
-                                text = "Цель",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                text = goal,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                        }
-                        currentClient.notes?.let { notes ->
-                            Text(
-                                text = "Заметки",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                text = notes,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                        }
-                        if (currentClient.goal == null && currentClient.notes == null) {
-                            Text(
-                                text = "Цель и заметки пока не заполнены",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                            )
-                        }
-                    }
-                } else {
-                    // Скелетон, пока клиент грузится — без фальшивого «Не задана»
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "…",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Button(
-                onClick = { viewModel.openDialog() },
-                enabled = !isAssigning,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                if (isAssigning) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    Icon(Icons.Default.Add, contentDescription = null)
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(if (isAssigning) "Назначаю..." else "Назначить программу")
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            OutlinedButton(
-                onClick = { onMeasurementsClick(clientId, client?.name ?: "") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(Icons.Default.FitnessCenter, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Замеры")
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            OutlinedButton(
-                onClick = onHistoryClick,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(Icons.Default.List, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("История тренировок")
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Text(
-                text = "Активные программы:",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            if (programs.isEmpty()) {
+        Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)) {
+            if (blocks.isEmpty()) {
                 EmptyState(
-                    icon = Icons.Default.FolderOpen,
-                    title = "Пока нет программ",
-                    subtitle = "Назначьте клиенту шаблон — он появится здесь с недельным планом.",
-                    actionLabel = "Назначить программу",
-                    onAction = { viewModel.openDialog() }
+                    icon = Icons.Default.ViewModule,
+                    title = "Тренировка пуста",
+                    subtitle = "Добавьте первый блок: разминка, силовая или меткон — через «+» сверху."
                 )
             } else {
                 LazyColumn {
-                    items(programs, key = { it.id }) { program ->
+                    items(blocks, key = { it.id }) { block ->
                         Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 6.dp)
-                                .combinedClickable(
-                                    onClick = { onProgramClick(program.id, program.name) },
-                                    onLongClick = { programToDelete = program }
-                                ),
-                            shape = RoundedCornerShape(18.dp),
-                            elevation = CardDefaults.cardElevation(3.dp)
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            elevation = CardDefaults.cardElevation(2.dp)
                         ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Row(
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text(
-                                        text = program.name.ifEmpty { "Программа" },
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    Text(
-                                        text = "Неделя ${program.weekNumber} из ${program.totalWeeks}",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(block.blockTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                        protocolBadge(block)?.let { badge ->
+                                            Text(badge, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                                        }
+                                    }
+                                    IconButton(onClick = { blockToDelete = block }) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Удалить блок", tint = MaterialTheme.colorScheme.error)
+                                    }
                                 }
-
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                LinearProgressIndicator(
-                                    progress = if (program.totalWeeks > 0) {
-                                        (program.weekNumber.toFloat() / program.totalWeeks).coerceIn(0f, 1f)
-                                    } else 0f,
+                                val exercises = blockExercises[block.id].orEmpty()
+                                if (exercises.isEmpty()) {
+                                    Text("Пусто", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                                } else {
+                                    exercises.forEach { ex ->
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).combinedClickable(
+                                                onClick = { viewModel.openExerciseDialog(block, ex) },
+                                                onLongClick = { viewModel.deleteExercise(ex) }
+                                            ),
+                                            shape = RoundedCornerShape(10.dp),
+                                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                                        ) {
+                                            Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(ex.exerciseName, style = MaterialTheme.typography.bodyLarge)
+                                                    if (!ex.note.isNullOrBlank()) {
+                                                        Text(ex.note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                                                    }
+                                                }
+                                                val plan = if (ex.targetSets == 0) {
+                                                    // Circuit: показываем метрику, если повторения не заданы (метры, ккал, время)
+                                                    if (ex.targetReps.isBlank()) metricLabels.firstOrNull { it.first == ex.metricType }?.second ?: ""
+                                                    else ex.targetReps
+                                                } else "${ex.targetSets}×${ex.targetReps}"
+                                                if (plan.isNotBlank()) {
+                                                    Text(plan, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                OutlinedButton(
+                                    onClick = { viewModel.openExerciseDialog(block) },
                                     modifier = Modifier.fillMaxWidth(),
-                                    color = MaterialTheme.colorScheme.primary
-                                )
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Icon(Icons.Default.Add, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Упражнение")
+                                }
                             }
                         }
                     }
