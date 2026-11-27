@@ -46,7 +46,7 @@ import kotlinx.coroutines.launch
 // Событие: в связке groupId введён вес weight. stamp нужен,
 // чтобы повторный ввод того же веса заново триггерил автоподстановку.
 data class WeightBroadcast(
-    val groupId: Long,
+    val groupId: Int,
     val weight: Double,
     val stamp: Long = System.nanoTime()
 )
@@ -104,7 +104,7 @@ class ClientWorkoutLogViewModel(application: Application, val workoutId: Long) :
         }
     }
 
-    fun broadcastWeight(groupId: Long?, weight: Double) {
+    fun broadcastWeight(groupId: Int?, weight: Double) {
         if (groupId != null && weight > 0) {
             _weightBroadcast.value = WeightBroadcast(groupId, weight)
         }
@@ -137,7 +137,7 @@ class ClientWorkoutLogViewModel(application: Application, val workoutId: Long) :
                 )
                 if (!isCircuit) {
                     _lastWeights.value = _lastWeights.value + (exerciseId to w)
-                    if (w > 0) broadcastWeight(supersetGroupId, w)
+                    if (w > 0) broadcastWeight(supersetGroupId?.toInt(), w)
                 }
             }
         }
@@ -468,7 +468,7 @@ private fun ExerciseLogCard(
                             return@Button
                         }
                         val s = setNum.toIntOrNull() ?: 1
-                        viewModel.saveLog(ex.id, setNum, reps, weight, note, false, supersetGroupId = ex.supersetGroup)
+                        viewModel.saveLog(ex.id, setNum, reps, weight, note, false, supersetGroupId = ex.supersetGroup?.toLong())
                         val over = if (targetSets > 0 && s > targetSets) " (сверх плана)" else ""
                         onSaved("Записано: подход $s, ${weight.trim().ifEmpty { "0" }} кг$over")
                         setNum = (s + 1).toString()
